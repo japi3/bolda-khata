@@ -205,7 +205,17 @@ Real speech is much harder than the synthetic tests (55% understood vs 95%+). Th
 first word, usually the customer's name, getting lost: the speaker started before the recorder did, or
 Prisma dropped a word at the very start. The 3 remaining silent errors are Prisma mishearings with no
 warning sign (उधार heard as "धार", 260 heard as 226, 1870 heard as 870). The spoken read-back and undo cover
-those. On the synthetic test sets, the new questions add about one extra tap per 20–25 commands, mostly when
+those.
+
+**The number errors are systematic in Prisma, not random.** The speaker confirmed saying 260 and 1870.
+Prisma heard "ਦੋ ਸੌ ਛੱਬੀ" (ਸੱਠ → ਛੱਬੀ) and "ਅੱਠ ਸੌ ਸੱਤਰ" (ਅਠਾਰਾਂ ਸੌ → ਅੱਠ ਸੌ) identically across three
+settings (digits, number words, single-language). Two app-side fixes were tested and rejected:
+a second transcription to cross-check amounts caught 0 of 3 errors and raised 3 false alarms on 10 correct
+recordings, and giving Prisma every Punjabi/Hindi number word as a hint fixed 0 and made the transcripts
+worse. Nothing in the transcript can tell these apart from a real 226 or 870, so the protection is the
+spoken read-back of the amount plus one-tap undo. This is worth reporting to Gnani with audio examples.
+
+On the synthetic test sets, the new questions add about one extra tap per 20–25 commands, mostly when
 opening a new account. A Hindi bug found along the way: "दो" means both "two" and "give" ("चढ़ा दो"); a lone दो
 is now read as the verb unless a unit or "rupees" follows.
 
@@ -274,6 +284,22 @@ The link is different every time and stops when you press Ctrl+C. The script ref
 a PIN, because anyone with the link reaches the login screen. The app is installable (manifest,
 icons, service worker), opens without a connection (showing an offline banner), and unlocks audio
 on the first tap so iPhones play the spoken replies.
+
+### When things fail
+
+Nothing is ever lost silently, and the app explains each failure in the chosen language:
+
+| Failure | What the app does |
+|---|---|
+| Phone offline, or the shop computer asleep / link down | "Couldn't reach the shop computer. Nothing was saved." The recording is kept with **Retry**, and a banner shows until the connection is back (checked every 20 s) |
+| Gnani credits used up (HTTP 402) | Says so and offers a **type it** box. Typing works fully, because understanding runs locally |
+| Gnani API key rejected (401/403) | Same: explains it and offers typing |
+| Gnani busy (429) or down (5xx, timeout) | "Try again in a few seconds", with Retry and the typing box |
+| Spoken reply fails | The entry is still saved; one note says voice replies are unavailable |
+
+Found while testing this: the recorder used to learn a voice that started the instant the mic was tapped
+as "background noise", and then reported "didn't hear anything". Its noise estimate now rises slowly, so
+it can't swallow the start of speech.
 
 Re-run the evaluations:
 ```bash

@@ -44,8 +44,11 @@ export class Recorder {
       let sum = 0;
       for (let i = 0; i < buf.length; i++) sum += buf[i] * buf[i];
       const rms = Math.sqrt(sum / buf.length);
-      if (!this.heardSpeech) noise = 0.95 * noise + 0.05 * rms;   // adapt to room noise
-      const loud = rms > Math.max(0.02, noise * 3);
+      // Room-noise estimate: falls fast, rises slowly. (It used to follow any sound quickly, so a
+      // voice that started the instant the mic was tapped got learned as "background" and the
+      // recording ended with "didn't hear anything".)
+      if (!this.heardSpeech) noise = rms < noise ? 0.8 * noise + 0.2 * rms : 0.995 * noise + 0.005 * rms;
+      const loud = rms > Math.max(0.02, noise * 3) || rms > 0.08;   // clearly loud always counts as speech
       const now = performance.now();
       // Heuristic: background above about -32 dBFS before speech starts -> warn the user.
       const noisyNow = !this.heardSpeech && now - this.t0 > 400 && noise > 0.025;

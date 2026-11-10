@@ -320,3 +320,8 @@ body:has(#view-test.active) .dock, body:has(#view-test.active) .tabs { display: 
   .shop { font-size: 17px; }
   .lang-switch button { padding: 4px 7px; font-size: 12px; }
 }
+
+/* failure bubble: inline "type it instead" */
+.fail-type { margin-top: 10px; }
+.fail-type input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line);
+  background: var(--paper); font-size: 15px; color: var(--ink); }

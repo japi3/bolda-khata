@@ -98,6 +98,12 @@ KHATA_TERMS_HI = ["उधार", "जमा", "खाता", "बकाया"
 STT_TOPIC_HI = "किराना दुकान का बही खाता: ग्राहकों के नाम, उधार, जमा, रकम और सामान"
 
 
+def _gnani_http_error(e: "gnani.GnaniError") -> HTTPException:
+    """Structured error the app can explain in the shopkeeper's language (see web/app.js FAIL)."""
+    return HTTPException(503 if e.kind in ("down", "busy") else 502,
+                         detail={"code": e.kind, "message": f"Gnani speech service: {e}"[:300]})
+
+
 def _lang(x) -> str:
     x = str(x or "").lower()
     return "en" if x.startswith("en") else "hi" if x.startswith("hi") else "pa"
@@ -212,7 +218,7 @@ async def voice(audio: UploadFile = File(...), pending: str | None = Form(None),
             stt = await gnani.transcribe(data, filename=audio.filename or "speech.wav",
                                          keyterms=names + KHATA_TERMS + ITEMS[:40], topic=STT_TOPIC)
     except gnani.GnaniError as e:
-        raise HTTPException(502, f"Prisma STT failed: {e}")
+        raise _gnani_http_error(e)
     transcript = (stt.get("transcript") or "").strip()
     if not transcript:
         msg = {"pa": "ਕੁਝ ਸੁਣਾਈ ਨਹੀਂ ਦਿੱਤਾ, ਫਿਰ ਬੋਲੋ ਜੀ।", "en": "I couldn't hear anything, please try again.", "hi": "कुछ सुनाई नहीं दिया, फिर से बोलिए।",
@@ -354,10 +360,13 @@ async def reminder(cid: int, lang: str = "pa"):
 
 @app.post("/api/tts")
 async def tts(body: dict = Body(...)):
-    url = await _speak(body["text"], voice=body.get("voice"), lang=_lang(body.get("lang")))
-    if not url:
-        raise HTTPException(502, "TTS failed")
-    return {"audio_url": url}
+    lang = _lang(body.get("lang"))
+    v, code = _voice(lang)
+    try:   # called directly (not via _speak) so the app learns *why* a spoken reply failed
+        key, _ = await gnani.synthesize(body["text"], voice=body.get("voice") or v, language=code)
+    except gnani.GnaniError as e:
+        raise _gnani_http_error(e)
+    return {"audio_url": f"/api/audio/{key}.wav"}
 
 
 @app.get("/api/audio/{key}.wav")
@@ -391,7 +400,7 @@ async def collect_record(audio: UploadFile = File(...), lang: str = Form("pa"), 
         row = await collect.record(data, lang, case, mode if mode in ("read", "free") else "free",
                                    env if env in ("quiet", "busy", "loud") else "quiet", speaker.strip())
     except gnani.GnaniError as e:
-        raise HTTPException(502, f"Prisma STT failed: {e}")
+        raise _gnani_http_error(e)
     return {**row, "stats": collect.stats()}
 
 

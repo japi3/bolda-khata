@@ -133,16 +133,103 @@ const audio = new Audio();
 
 // ------------------------------------------------------------------ api
 async function api(path, opts = {}) {
-  const r = await fetch(path, { headers: opts.body && !(opts.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}, ...opts });
+  let r;
+  try {
+    r = await fetch(path, { headers: opts.body && !(opts.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}, ...opts });
+  } catch (_) {
+    const err = new Error('network');
+    err.code = 'network';
+    setReachable(false);
+    throw err;
+  }
+  setReachable(true);
   if (r.status === 401 && path !== '/api/login') { showPin(); throw new Error('PIN required'); }
   if (!r.ok) {
-    let msg = r.statusText;
-    try { msg = (await r.json()).detail || msg; } catch (_) {}
-    throw new Error(msg);
+    let msg = r.statusText, code = null;
+    try {
+      const d = (await r.json()).detail;
+      if (d && typeof d === 'object') { msg = d.message || msg; code = d.code || null; } else if (d) msg = d;
+    } catch (_) {}
+    const err = new Error(msg);
+    err.code = code;
+    err.status = r.status;
+    throw err;
   }
   return r.json();
 }
 const post = (p, body) => api(p, { method: 'POST', body: body instanceof FormData ? body : JSON.stringify(body) });
+
+// ------------------------------------------------------------------ failures
+const FAIL = {
+  network: ['ਦੁਕਾਨ ਵਾਲੇ ਕੰਪਿਊਟਰ ਨਾਲ ਸੰਪਰਕ ਨਹੀਂ ਹੋਇਆ। ਕੁਝ ਨਹੀਂ ਲਿਖਿਆ ਗਿਆ।',
+    "Couldn't reach the shop computer. Nothing was saved.",
+    'दुकान वाले कंप्यूटर से संपर्क नहीं हुआ। कुछ नहीं लिखा गया।'],
+  credits: ['Gnani ਦੇ ਕ੍ਰੈਡਿਟ ਖਤਮ ਹੋ ਗਏ ਹਨ, ਆਵਾਜ਼ ਨਹੀਂ ਚੱਲੇਗੀ। ਲਿਖ ਕੇ ਐਂਟਰੀ ਕਰ ਸਕਦੇ ਹੋ।',
+    'Gnani credits have run out, so voice is off. You can still type the entry.',
+    'Gnani के क्रेडिट ख़त्म हो गए हैं, आवाज़ नहीं चलेगी। लिखकर एंट्री कर सकते हैं।'],
+  auth: ['Gnani ਦੀ ਚਾਬੀ (API key) ਕੰਮ ਨਹੀਂ ਕਰ ਰਹੀ। ਲਿਖ ਕੇ ਐਂਟਰੀ ਕਰ ਸਕਦੇ ਹੋ।',
+    "The Gnani API key isn't working. You can still type the entry.",
+    'Gnani की चाबी (API key) काम नहीं कर रही। लिखकर एंट्री कर सकते हैं।'],
+  busy: ['ਆਵਾਜ਼ ਸੇਵਾ ਰੁੱਝੀ ਹੋਈ ਹੈ। ਕੁਝ ਸਕਿੰਟ ਬਾਅਦ ਫਿਰ ਭੇਜੋ।',
+    'The voice service is busy. Try again in a few seconds.',
+    'आवाज़ सेवा व्यस्त है। कुछ सेकंड बाद फिर भेजिए।'],
+  down: ['ਆਵਾਜ਼ ਸੇਵਾ (Gnani) ਇਸ ਵੇਲੇ ਨਹੀਂ ਚੱਲ ਰਹੀ। ਫਿਰ ਭੇਜੋ ਜਾਂ ਲਿਖ ਕੇ ਐਂਟਰੀ ਕਰੋ।',
+    "The voice service (Gnani) isn't responding. Retry, or type the entry.",
+    'आवाज़ सेवा (Gnani) अभी नहीं चल रही। फिर भेजिए या लिखकर एंट्री कीजिए।'],
+  other: ['ਮਾਫ਼ ਕਰਨਾ, ਕੁਝ ਗੜਬੜ ਹੋ ਗਈ। ਕੁਝ ਨਹੀਂ ਲਿਖਿਆ ਗਿਆ।', 'Sorry, something went wrong. Nothing was saved.',
+    'माफ़ कीजिए, कुछ गड़बड़ हो गई। कुछ नहीं लिखा गया।'],
+};
+function failText(e) {
+  const [pa, en, hi] = FAIL[e.code] || FAIL.other;
+  return tr(pa, en, hi);
+}
+// An error bubble that keeps what the shopkeeper said: Retry (resend the same recording/text)
+// and, when voice can't work, a box to type the entry instead.
+function failBubble(e, retry, el) {
+  const voiceDead = ['credits', 'auth', 'down', 'busy'].includes(e.code);
+  const html = `<div class="say">${esc(failText(e))}</div>
+    ${e.code && e.code !== 'network' ? `<span class="en sub-only">${esc(e.message)}</span>` : ''}
+    <div class="bot-actions">
+      ${retry ? `<button class="icon-btn retry">↻ ${L('ਫਿਰ ਭੇਜੋ', 'Retry', 'फिर भेजें')}</button>` : ''}
+    </div>
+    ${voiceDead || e.code === 'network' ? `<form class="type-row fail-type">
+      <input placeholder="${esc(tr('ਲਿਖ ਕੇ ਐਂਟਰੀ ਕਰੋ…', 'Type the entry…', 'लिखकर एंट्री कीजिए…'))}" autocomplete="off">
+      <button class="btn" type="submit">${L('ਭੇਜੋ', 'Send', 'भेजें')}</button></form>` : ''}`;
+  if (el) { el.className = 'bubble bot'; el.innerHTML = html; } else el = addBubble('bot', html);
+  $('.retry', el)?.addEventListener('click', () => { el.remove(); retry(); });
+  const f = $('.fail-type', el);
+  if (f) f.onsubmit = (ev) => {
+    ev.preventDefault();
+    const inp = $('input', f), v = inp.value.trim();
+    if (v) { inp.value = ''; sendText(v); }
+  };
+  el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  return el;
+}
+
+// ------------------------------------------------------------------ connection watch
+// navigator.onLine only knows about the phone's own network; this also notices when the
+// shop computer (the Mac running the app) is asleep or the link is down.
+let reachable = true;
+function setReachable(ok) {
+  reachable = ok;
+  const bar = $('#offlineBar');
+  if (!bar) return;
+  if (!navigator.onLine) {
+    bar.hidden = false;
+    bar.textContent = 'ਇੰਟਰਨੈੱਟ ਨਹੀਂ · इंटरनेट नहीं · You’re offline';
+  } else if (!ok) {
+    bar.hidden = false;
+    bar.textContent = 'ਦੁਕਾਨ ਵਾਲੇ ਕੰਪਿਊਟਰ ਨਾਲ ਸੰਪਰਕ ਨਹੀਂ · दुकान वाले कंप्यूटर से संपर्क नहीं · Can’t reach the shop computer';
+  } else bar.hidden = true;
+}
+async function pingServer() {
+  if (document.hidden) return;
+  try { const r = await fetch('/api/auth', { cache: 'no-store' }); setReachable(r.ok || r.status === 401); }
+  catch (_) { setReachable(false); }
+}
+setInterval(pingServer, 20000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) pingServer(); });
 
 // ------------------------------------------------------------------ PIN lock (phone link)
 function showPin(msg = '') {
@@ -160,7 +247,7 @@ $('#pinForm').onsubmit = async (e) => {
 };
 
 // ------------------------------------------------------------------ offline banner
-const setOffline = () => ($('#offlineBar').hidden = navigator.onLine);
+const setOffline = () => setReachable(reachable);
 window.addEventListener('online', setOffline);
 window.addEventListener('offline', setOffline);
 setOffline();
@@ -182,7 +269,19 @@ async function speak(text, btn, voice) {
     const { audio_url } = await post('/api/tts', { text, voice, lang });
     play(audio_url, btn);
     return audio_url;
-  } catch (e) { console.warn('tts', e); }
+  } catch (e) {
+    console.warn('tts', e);
+    if (!speak.warned && e.code !== 'network') {
+      speak.warned = true;
+      toast(e.code === 'credits'
+        ? tr('ਬੋਲ ਕੇ ਜਵਾਬ ਬੰਦ ਹਨ (Gnani ਕ੍ਰੈਡਿਟ ਖਤਮ)। ਐਂਟਰੀਆਂ ਫਿਰ ਵੀ ਲਿਖੀਆਂ ਜਾ ਰਹੀਆਂ ਹਨ।',
+             'Spoken replies are off (Gnani credits used up). Entries are still being saved.',
+             'बोलकर जवाब बंद हैं (Gnani क्रेडिट ख़त्म)। एंट्री फिर भी लिखी जा रही हैं।')
+        : tr('ਬੋਲ ਕੇ ਜਵਾਬ ਇਸ ਵੇਲੇ ਨਹੀਂ ਚੱਲ ਰਹੇ। ਐਂਟਰੀਆਂ ਫਿਰ ਵੀ ਲਿਖੀਆਂ ਜਾ ਰਹੀਆਂ ਹਨ।',
+             'Spoken replies are unavailable right now. Entries are still being saved.',
+             'बोलकर जवाब अभी नहीं चल रहे। एंट्री फिर भी लिखी जा रही हैं।'));
+    }
+  }
 }
 function play(url, btn) {
   if (!url) return;
@@ -416,11 +515,15 @@ async function stopRec() {
     return;
   }
   hood('mic', 'done', Math.round(out.seconds * 1000));
+  sendVoice(out.blob, pending);
+}
+
+async function sendVoice(blob, pendingAtRecord) {
   const fd = new FormData();
-  fd.append('audio', out.blob, 'speech.wav');
+  fd.append('audio', blob, 'speech.wav');
   fd.append('speak', 'false');
   fd.append('lang', lang);
-  if (pending) fd.append('pending', JSON.stringify(pending));
+  if (pendingAtRecord) fd.append('pending', JSON.stringify(pendingAtRecord));
   const me = addBubble('me', '<span class="dots"><span></span><span></span><span></span></span>');
   $('#mic').classList.add('busy');
   hood('stt', 'run');
@@ -430,8 +533,8 @@ async function stopRec() {
     me.innerHTML = res.transcript ? `${esc(res.transcript)}${roman}` : '(…)';
     await afterResult(res);
   } catch (e) {
-    me.remove();
-    addBubble('bot', `<div class="say">${tr('ਮਾਫ਼ ਕਰਨਾ, ਕੁਝ ਗੜਬੜ ਹੋ ਗਈ।', 'Sorry, something went wrong.')}</div><span class="en sub-only">${esc(e.message)}</span>`);
+    me.innerHTML = `🎙 <span class="muted">${esc(tr('ਆਵਾਜ਼ ਰਿਕਾਰਡ ਹੋਈ, ਭੇਜੀ ਨਹੀਂ ਗਈ', 'Recorded, not sent', 'आवाज़ रिकॉर्ड हुई, भेजी नहीं गई'))}</span>`;
+    failBubble(e, () => { me.remove(); sendVoice(blob, pendingAtRecord); });
   } finally {
     $('#mic').classList.remove('busy');
   }
@@ -446,7 +549,7 @@ async function sendText(text) {
     const res = await post('/api/text', { text, pending, speak: false, lang });
     await afterResult(res, think);
   } catch (e) {
-    think.innerHTML = `<div class="say">${tr('ਮਾਫ਼ ਕਰਨਾ, ਕੁਝ ਗੜਬੜ ਹੋ ਗਈ।', 'Sorry, something went wrong.')}</div><span class="en sub-only">${esc(e.message)}</span>`;
+    failBubble(e, () => sendText(text), think);
   }
 }
 

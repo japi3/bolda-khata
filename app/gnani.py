@@ -13,7 +13,22 @@ from . import config
 
 
 class GnaniError(RuntimeError):
-    pass
+    """status: HTTP status from Gnani, or None for network errors / timeouts."""
+
+    def __init__(self, msg: str, status: int | None = None):
+        super().__init__(msg)
+        self.status = status
+
+    @property
+    def kind(self) -> str:
+        """What it means for the shopkeeper: credits | auth | busy | down."""
+        if self.status == 402:
+            return "credits"
+        if self.status in (401, 403):
+            return "auth"
+        if self.status == 429:
+            return "busy"
+        return "down"
 
 
 # Some accounts allow only one active request at a time (429 RATE_LIMITED),
@@ -46,13 +61,13 @@ async def _post(path: str, retries: int = 3, **kw) -> httpx.Response:
             try:
                 r = await client.post(path, **kw)
             except httpx.HTTPError as e:  # network hiccup
-                last = GnaniError(f"network error: {e}")
+                last = GnaniError(f"network error: {e}", None)
                 r = None
         if r is not None:
             if r.status_code in (429, 500, 502, 503, 504) and attempt < retries:
-                last = GnaniError(f"{r.status_code}: {r.text[:200]}")
+                last = GnaniError(f"{r.status_code}: {r.text[:200]}", r.status_code)
             elif r.status_code >= 400:
-                raise GnaniError(f"{r.status_code}: {r.text[:300]}")
+                raise GnaniError(f"{r.status_code}: {r.text[:300]}", r.status_code)
             else:
                 return r
         await asyncio.sleep(delay)
