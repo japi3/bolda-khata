@@ -313,3 +313,9 @@ Re-run the evaluations:
 **Evon (optional)**: `deploy/evon_modal.py` serves Evon through vLLM on a Modal H100. Modal requires a payment method for any GPU,
 so this build does not use it. Point `EVON_BASE_URL` / `EVON_API_KEY` at any OpenAI-compatible
 Evon server and the app uses it automatically, falling back to the on-device models if Evon is slow or down.
+
+## License
+
+MIT (see [LICENSE](LICENSE)). The Gnani AI models (Prisma, Timbre, Evon) used by this app are
+separate services under Gnani's own terms, and MuRIL weights come from Google under their own license;
+neither is included in this repository.
