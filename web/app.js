@@ -212,21 +212,125 @@ function failBubble(e, retry, el) {
 // shop computer (the Mac running the app) is asleep or the link is down.
 let reachable = true;
 function setReachable(ok) {
+  const cameBack = ok && !reachable;
   reachable = ok;
   const bar = $('#offlineBar');
-  if (!bar) return;
-  if (!navigator.onLine) {
-    bar.hidden = false;
-    bar.textContent = 'ਇੰਟਰਨੈੱਟ ਨਹੀਂ · इंटरनेट नहीं · You’re offline';
-  } else if (!ok) {
-    bar.hidden = false;
-    bar.textContent = 'ਦੁਕਾਨ ਵਾਲੇ ਕੰਪਿਊਟਰ ਨਾਲ ਸੰਪਰਕ ਨਹੀਂ · दुकान वाले कंप्यूटर से संपर्क नहीं · Can’t reach the shop computer';
-  } else bar.hidden = true;
+  if (bar) {
+    const wait = queueCount ? ` · ${queueCount} ${L('ਐਂਟਰੀਆਂ ਫ਼ੋਨ ਵਿੱਚ ਰੱਖੀਆਂ', 'entries saved on this phone', 'एंट्री फ़ोन में रखी')}` : '';
+    if (!navigator.onLine) {
+      bar.hidden = false;
+      bar.innerHTML = 'ਇੰਟਰਨੈੱਟ ਨਹੀਂ · इंटरनेट नहीं · You’re offline' + wait;
+    } else if (!ok) {
+      bar.hidden = false;
+      bar.innerHTML = 'ਦੁਕਾਨ ਵਾਲੇ ਕੰਪਿਊਟਰ ਨਾਲ ਸੰਪਰਕ ਨਹੀਂ · दुकान वाले कंप्यूटर से संपर्क नहीं · Can’t reach the shop computer' + wait;
+    } else if (queueCount) {
+      bar.hidden = false;
+      bar.innerHTML = `🕓 ${queueCount} ${L('ਰੱਖੀਆਂ ਐਂਟਰੀਆਂ ਭੇਜ ਰਹੇ ਹਾਂ…', 'saved entries waiting to send…', 'रखी हुई एंट्री भेज रहे हैं…')}`;
+    } else bar.hidden = true;
+  }
+  if (cameBack) flushQueue();
 }
 async function pingServer() {
   if (document.hidden) return;
   try { const r = await fetch('/api/auth', { cache: 'no-store' }); setReachable(r.ok || r.status === 401); }
   catch (_) { setReachable(false); }
+  if (reachable && queueCount) flushQueue();   // e.g. Gnani was down: the server answered, try the queue again
+}
+
+// ------------------------------------------------------------------ offline queue
+// When the shop computer, the internet or Gnani can't be reached, the recording (or typed entry) is kept on
+// this phone (IndexedDB) and sent by itself, oldest first, once the connection is back. Each entry is written
+// with the time it was SPOKEN, so "ਕੱਲ੍ਹ" still means the right day even if it is sent the next morning.
+const QUEUEABLE = ['network', 'down', 'busy'];
+let queueCount = 0;
+let flushing = false;
+function qdb() {
+  return new Promise((ok, bad) => {
+    const r = indexedDB.open('bolda-khata-queue', 1);
+    r.onupgradeneeded = () => r.result.createObjectStore('items', { keyPath: 'id', autoIncrement: true });
+    r.onsuccess = () => ok(r.result);
+    r.onerror = () => bad(r.error);
+  });
+}
+async function qdo(mode, fn) {
+  const d = await qdb();
+  return new Promise((ok, bad) => {
+    const t = d.transaction('items', mode);
+    const req = fn(t.objectStore('items'));
+    t.oncomplete = () => ok(req.result);
+    t.onerror = () => bad(t.error);
+  });
+}
+const qAdd = (item) => qdo('readwrite', (s) => s.add(item));
+const qAll = () => qdo('readonly', (s) => s.getAll());
+const qDel = (id) => qdo('readwrite', (s) => s.delete(id));
+async function updateQueueBadge() {
+  try { queueCount = (await qAll()).length; } catch (_) { queueCount = 0; }
+  setReachable(reachable);
+}
+const hhmm = (ms) => new Date(ms).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+
+// Keep an entry on the phone. `me` is the shopkeeper's bubble, which becomes a "waiting" bubble.
+async function enqueue(item, me) {
+  if (item.blob) { item.audio = await item.blob.arrayBuffer(); delete item.blob; }   // iOS stores buffers reliably
+  const id = await qAdd(item);
+  me.dataset.qid = id;
+  me.classList.add('queued');
+  const what = item.text ? `${esc(item.text)}<br>` : '🎙 ';
+  me.innerHTML = `${what}<span class="muted">🕓 ${esc(tr('ਫ਼ੋਨ ਵਿੱਚ ਰੱਖ ਲਈ, ਸੰਪਰਕ ਹੁੰਦੇ ਹੀ ਆਪੇ ਭੇਜ ਦਿਆਂਗੇ',
+    'Saved on this phone. It will send by itself when the connection is back.',
+    'फ़ोन में रख ली, संपर्क होते ही अपने आप भेज देंगे'))}</span>
+    <button class="icon-btn q-drop">✕ ${L('ਰੱਦ ਕਰੋ', 'Discard', 'रद्द करें')}</button>`;
+  $('.q-drop', me).onclick = async () => { await qDel(id); me.remove(); updateQueueBadge(); };
+  me.scrollIntoView({ behavior: 'smooth', block: 'end' });
+  await updateQueueBadge();
+}
+
+async function sendQueued(it) {
+  if (it.kind === 'voice') {
+    const fd = new FormData();
+    fd.append('audio', new Blob([it.audio], { type: 'audio/wav' }), 'speech.wav');
+    fd.append('speak', 'false');
+    fd.append('lang', it.lang);
+    fd.append('recorded_at', String(it.at));
+    if (it.pending) fd.append('pending', JSON.stringify(it.pending));
+    return post('/api/voice', fd);
+  }
+  return post('/api/text', { text: it.text, pending: it.pending, speak: false, lang: it.lang, recorded_at: it.at });
+}
+
+async function flushQueue() {
+  if (flushing || pending) return;   // an open question waits for its answer first
+  flushing = true;
+  try {
+    const items = (await qAll()).sort((a, b) => a.id - b.id);
+    for (const it of items) {
+      if (pending) break;
+      let res;
+      try { res = await sendQueued(it); } catch (e) {
+        // unreachable, Gnani down/busy/out of credits, or PIN needed: keep it and try again later
+        if (QUEUEABLE.includes(e.code) || ['credits', 'auth'].includes(e.code) || e.message === 'PIN required') break;
+        // refused for good (e.g. a recording too short): don't block the rest of the queue behind it
+        await qDel(it.id);
+        const bad = document.querySelector(`.bubble.me[data-qid="${it.id}"]`);
+        if (bad) { bad.classList.remove('queued'); $('.q-drop', bad)?.remove(); }
+        failBubble(e, null);
+        continue;
+      }
+      await qDel(it.id);
+      let me = document.querySelector(`.bubble.me[data-qid="${it.id}"]`);
+      if (!me) me = addBubble('me', '');
+      me.classList.remove('queued');
+      me.innerHTML = `${esc(res.transcript || it.text || '(…)')}<span class="en">🕓 ${esc(tr('ਬੋਲਿਆ', 'said', 'बोला'))} ${hhmm(it.at)}</span>`;
+      await afterResult(res);
+      await updateQueueBadge();
+    }
+  } catch (e) {
+    console.error(e);
+  } finally {
+    flushing = false;
+    await updateQueueBadge();
+  }
 }
 setInterval(pingServer, 20000);
 document.addEventListener('visibilitychange', () => { if (!document.hidden) pingServer(); });
@@ -356,6 +460,38 @@ function entryCard(t) {
   </div>`;
 }
 
+// a multi-part bill: every line, the total, money received now, change and the new balance
+function billCard(b, cname) {
+  const lines = (b.text?.[lang] || b.text?.en || []).map((t, i) => {
+    const label = t.includes(' = ') ? t.slice(0, t.lastIndexOf(' = ')) : t.slice(0, t.lastIndexOf(' ₹')) || t;
+    return `<div class="bill-line"><span>${esc(label)}</span><span>${rs(b.lines[i].amount)}</span></div>`;
+  }).join('');
+  const row = (label, v, cls = '') => `<div class="bill-line ${cls}"><span>${label}</span><span>${v}</span></div>`;
+  let h = `<div class="entry bill">${cname ? `<div class="entry-row"><span class="who">${esc(cname)}</span><span class="tag credit">${L('ਬਿੱਲ', 'Bill', 'बिल')}</span></div>` : ''}${lines}`;
+  h += row(L('ਕੁੱਲ', 'Total', 'कुल'), rs(b.total), 'bill-total');
+  const got = b.paid_in ?? b.paid;
+  if (got) h += row(L('ਹੁਣ ਮਿਲੇ', 'Received now', 'अभी मिले'), '−' + rs(got), 'payment');
+  if (b.change) h += row(L('ਵਾਪਸ ਦਿਓ', 'Give back', 'वापस दें'), rs(b.change), 'muted');
+  if (b.balance !== undefined) {
+    h += row(b.balance >= 0 ? L('ਕੁੱਲ ਬਕਾਇਆ', 'Total due', 'कुल बकाया') : L('ਐਡਵਾਂਸ', 'Advance', 'एडवांस'),
+      rs(Math.abs(b.balance)), 'bill-total');
+  } else if (!b.paid_in && b.paid !== null && b.paid !== undefined && b.due > 0) {
+    h += row(L('ਬਾਕੀ', 'Left', 'बाकी'), rs(b.due), 'credit');
+  }
+  return h + '</div>';
+}
+
+// answer to a smart question: one ruled row per customer / entry, tap a customer to open the account
+function listCard(r) {
+  const rows = r.rows || [];
+  if (!rows.length) return '';
+  const tap = (x) => x.customer_id && !r.customer_id;
+  let h = '<div class="entry list">' + rows.map((x) => `<div class="bill-line${tap(x) ? ' tap' : ''}${x.low ? ' low' : ''}"${tap(x) ? ` data-cid="${x.customer_id}"` : ''}>
+      <span>${esc(x.name[lang] || x.name.en)}${x.sub?.[lang] ? ` <span class="muted-sub">${esc(x.sub[lang])}</span>` : ''}</span><span>${x.qty ? esc(x.qty[lang] || x.qty.en) : rs(x.amount)}</span></div>`).join('');
+  if (rows.length > 1 && r.total !== undefined) h += `<div class="bill-line bill-total"><span>${L('ਕੁੱਲ', 'Total', 'कुल')}</span><span>${rs(r.total)}</span></div>`;
+  return h + '</div>';
+}
+
 async function showReply(res, thinkingEl) {
   const r = res.reply;
   const cmd = res.command;
@@ -364,8 +500,14 @@ async function showReply(res, thinkingEl) {
   let txn = null;
   if (r.txn_id) {
     txn = (await api('/api/state')).recent.find((t) => t.id === r.txn_id);
-    html += entryCard(txn);
+    if (r.bill) {
+      const cname = txn?.customer && ((lang === 'en' && txn.customer_roman) || (lang === 'hi' && txn.customer_hi) || txn.customer);
+      html += billCard(r.bill, cname);
+    } else html += entryCard(txn);
+  } else if (r.bill) {
+    html += billCard(r.bill, null);
   }
+  if (r.action === 'show_list' || r.action === 'stock_set') html += listCard(r);
   const rw = r.risk_warning?.reasons?.[0];
   if (rw) html += `<div class="warn">⚠️ ${esc(rw.pa || '')} ${EN(rw.en || '', rw.hi)}</div>`;
   if (r.action === 'choose_customer') {
@@ -379,16 +521,22 @@ async function showReply(res, thinkingEl) {
     html += `<div class="choices"><button data-confirm="1">✓ ਠੀਕ ਹੈ <span class="en">yes, save</span></button>
       <button data-cancel="1">✗ ਦੁਬਾਰਾ ਬੋਲਾਂਗਾ <span class="en">no, I'll repeat</span></button></div>`;
   }
+  if (r.action === 'ask_change') {
+    html += `<div class="choices"><button data-extra="change">↩ ${L(`${rs(r.extra)} ਵਾਪਸ ਦਿੱਤੇ`, `Gave ${rs(r.extra)} back`, `${rs(r.extra)} वापस दिए`)}</button>
+      <button data-extra="advance">＋ ${L('ਐਡਵਾਂਸ ਰੱਖੋ', 'Keep as advance', 'एडवांस रखें')}</button></div>`;
+  }
   if (r.action === 'confirm_direction') {
     html += `<div class="choices"><button data-intent="PAYMENT">− ਜਮ੍ਹਾ <span class="en">received</span></button>
       <button data-intent="CREDIT">+ ਉਧਾਰ <span class="en">credit</span></button></div>`;
   }
   html += `<div class="bot-actions"><button class="icon-btn play">${PLAY_IC}${L('ਸੁਣੋ', 'Play', 'सुनें')}</button>`;
   if (r.txn_id) html += `<button class="icon-btn undo">${UNDO_IC}${L('ਵਾਪਸ', 'Undo', 'वापस')}</button>`;
+  if (r.stock_move_ids?.length) html += `<button class="icon-btn stock-undo">${UNDO_IC}${L('ਵਾਪਸ', 'Undo', 'वापस')}</button>`;
   if (r.customer_id) html += `<button class="icon-btn open">ਖਾਤਾ <span class="en">open</span></button>`;
   if (r.action === 'show_customers') html += `<button class="icon-btn goto" data-v="customers">${L('ਸਾਰੇ ਗਾਹਕ', 'All customers')}</button>`;
   if (r.action === 'show_insights') html += `<button class="icon-btn goto" data-v="insights">${L('ਸੂਝ ਦੇਖੋ', 'See insights')}</button>`;
-  if (cmd) html += `<span class="engine">${cmd.engine === 'evon' ? 'Evon' : cmd.engine === 'muril+memm' ? 'MuRIL+MEMM' : 'on-device'} · ${Math.round(cmd.confidence * 100)}%</span>`;
+  if (cmd?.intent === 'QUERY' || cmd?.intent === 'STOCK') html += `<span class="engine">${L('ਖਾਤੇ ਤੋਂ ਸਿੱਧਾ ਹਿਸਾਬ', 'exact, from the ledger', 'खाते से सीधा हिसाब')}</span>`;
+  else if (cmd) html += `<span class="engine">${cmd.engine === 'evon' ? 'Evon' : cmd.engine === 'muril+memm' ? 'MuRIL+MEMM' : 'on-device'} · ${Math.round(cmd.confidence * 100)}%</span>`;
   html += `</div>`;
   (r.reminders || []).forEach((rem) => {
     html += `<div class="entry"><div class="entry-row"><span class="who">${esc(rem.name)}</span><span class="amt credit">${rs(rem.balance)}</span></div>
@@ -417,6 +565,17 @@ async function showReply(res, thinkingEl) {
     refresh();
   });
   $('.open', el)?.addEventListener('click', () => openCustomer(r.customer_id));
+  $$('.list .tap', el).forEach((row) => (row.onclick = () => openCustomer(+row.dataset.cid)));
+  $('.stock-undo', el)?.addEventListener('click', async (e) => {
+    const btn = e.currentTarget;
+    for (const id of r.stock_move_ids) await post(`/api/stock/undo/${id}`, {});
+    btn.disabled = true;
+    $('.entry', el)?.style.setProperty('opacity', '.4');
+    toast(tr('ਸਟਾਕ ਦੀ ਗਿਣਤੀ ਕੱਟ ਦਿੱਤੀ', 'Stock count removed', 'स्टॉक की गिनती हटा दी'), tr('ਮੁੜ ਲਿਆਓ', 'Restore'), async () => {
+      for (const id of r.stock_move_ids) await post(`/api/stock/undo/${id}`, { restore: true });
+      $('.entry', el)?.style.removeProperty('opacity');
+    });
+  });
   $$('.goto', el).forEach((b) => (b.onclick = () => switchView(b.dataset.v)));
   $$('.choices button', el).forEach((b) => (b.onclick = async () => {
     let body = { pending: r.pending };
@@ -426,12 +585,14 @@ async function showReply(res, thinkingEl) {
       toast('ਨਹੀਂ ਲਿਖਿਆ, ਦੁਬਾਰਾ ਬੋਲੋ <span class="en">Nothing saved, say it again</span>');
       return;
     }
-    if (b.dataset.amount) body.amount = +b.dataset.amount;
+    if (b.dataset.extra) body.extra = b.dataset.extra;
+    else if (b.dataset.amount) body.amount = +b.dataset.amount;
     else if (b.dataset.confirm) body.confirm = true;
     else if (b.dataset.intent) body.intent = b.dataset.intent;
     else if (b.dataset.id) body.customer_id = +b.dataset.id;
     else body.new_name = r.pending.customer.name;
     pending = null;
+    $$('.choices button', el).forEach((x) => (x.disabled = true));   // one answer only: no double entries
     const think = addBubble('bot thinking', '<span class="dots"><span></span><span></span><span></span></span>');
     const res2 = await post('/api/resolve', { ...body, speak: false, lang });
     await showReply(res2, think);
@@ -440,8 +601,9 @@ async function showReply(res, thinkingEl) {
   $$('.rem', el).forEach((b) => (b.onclick = () => playReminder(+b.dataset.cid, b)));
   $$('.wa', el).forEach((b) => (b.onclick = () => shareReminder(+b.dataset.cid)));
 
-  pending = ['ask_amount', 'ask_customer', 'choose_customer', 'confirm_direction', 'confirm_heard'].includes(r.action) ? r.pending : null;
+  pending = ['ask_amount', 'ask_customer', 'choose_customer', 'confirm_direction', 'confirm_heard', 'ask_change'].includes(r.action) ? r.pending : null;
   if (r.txn_id || r.action === 'undone') refresh();
+  if (!pending && queueCount && !flushing) flushQueue();   // a question from the queue was answered: carry on
 }
 
 // ------------------------------------------------------------------ hood (desktop pipeline view)
@@ -518,13 +680,18 @@ async function stopRec() {
   sendVoice(out.blob, pending);
 }
 
-async function sendVoice(blob, pendingAtRecord) {
+async function sendVoice(blob, pendingAtRecord, at = Date.now()) {
   const fd = new FormData();
   fd.append('audio', blob, 'speech.wav');
   fd.append('speak', 'false');
   fd.append('lang', lang);
+  fd.append('recorded_at', String(at));
   if (pendingAtRecord) fd.append('pending', JSON.stringify(pendingAtRecord));
   const me = addBubble('me', '<span class="dots"><span></span><span></span><span></span></span>');
+  if (queueCount) {   // older entries are still waiting: keep the order, this one goes behind them
+    try { await enqueue({ kind: 'voice', blob, lang, pending: pendingAtRecord || null, at }, me); flushQueue(); return; }
+    catch (_) { /* no storage on this phone: send directly */ }
+  }
   $('#mic').classList.add('busy');
   hood('stt', 'run');
   try {
@@ -533,23 +700,39 @@ async function sendVoice(blob, pendingAtRecord) {
     me.innerHTML = res.transcript ? `${esc(res.transcript)}${roman}` : '(…)';
     await afterResult(res);
   } catch (e) {
+    if (QUEUEABLE.includes(e.code)) {
+      try {
+        await enqueue({ kind: 'voice', blob, lang, pending: pendingAtRecord || null, at }, me);
+        if (pendingAtRecord) pending = null;   // the answer travels with the queued recording
+        return;
+      } catch (_) { /* no storage: fall back to the retry bubble */ }
+    }
     me.innerHTML = `🎙 <span class="muted">${esc(tr('ਆਵਾਜ਼ ਰਿਕਾਰਡ ਹੋਈ, ਭੇਜੀ ਨਹੀਂ ਗਈ', 'Recorded, not sent', 'आवाज़ रिकॉर्ड हुई, भेजी नहीं गई'))}</span>`;
-    failBubble(e, () => { me.remove(); sendVoice(blob, pendingAtRecord); });
+    failBubble(e, () => { me.remove(); sendVoice(blob, pendingAtRecord, at); });
   } finally {
     $('#mic').classList.remove('busy');
   }
 }
 
-async function sendText(text) {
+async function sendText(text, at = Date.now()) {
   if (!text.trim()) return;
-  addBubble('me', esc(text));
+  const me = addBubble('me', esc(text));
   hoodReset(); hood('mic', 'skip'); hood('stt', 'skip');
+  const p = pending;
+  if (queueCount) {   // keep the order behind entries already waiting
+    try { await enqueue({ kind: 'text', text, lang, pending: p, at }, me); pending = null; flushQueue(); return; }
+    catch (_) { /* no storage: send directly */ }
+  }
   const think = addBubble('bot thinking', '<span class="dots"><span></span><span></span><span></span></span>');
   try {
-    const res = await post('/api/text', { text, pending, speak: false, lang });
+    const res = await post('/api/text', { text, pending: p, speak: false, lang, recorded_at: at });
     await afterResult(res, think);
   } catch (e) {
-    failBubble(e, () => sendText(text), think);
+    if (QUEUEABLE.includes(e.code)) {
+      try { think.remove(); await enqueue({ kind: 'text', text, lang, pending: p, at }, me); pending = null; return; }
+      catch (_) { /* no storage: retry bubble below */ }
+    }
+    failBubble(e, () => { me.remove(); sendText(text, at); }, think.isConnected ? think : null);
   }
 }
 
@@ -733,7 +916,13 @@ function chart(daily) {
 async function renderInsights() {
   const el = $('#insights');
   el.innerHTML = '<div class="empty"><span class="dots"><span></span><span></span><span></span></span></div>';
-  const d = await api('/api/insights');
+  const [d, st] = await Promise.all([api('/api/insights'), api('/api/stock').catch(() => ({ items: [] }))]);
+  const stockCard = `<div class="card"><h3>ਸਟਾਕ <span class="en">Stock</span></h3>
+      ${st.items.length ? `<div class="entry list" style="margin-top:0">${st.items.map((x) => `<div class="bill-line${x.low ? ' low' : ''}">
+        <span>${esc(x.name[lang] || x.name.en)}${x.low ? ` <span class="muted-sub">${esc(x.sub[lang] || x.sub.en)}</span>` : ''}</span><span>${esc(x.qty[lang] || x.qty.en)}</span></div>`).join('')}</div>`
+        : `<p class="muted">${esc(tr('ਹਾਲੇ ਕੋਈ ਸਟਾਕ ਨਹੀਂ। ਬੋਲੋ: “ਆਟੇ ਦਾ ਸਟਾਕ 20 ਬੋਰੀਆਂ ਹੈ”। ਥੋਕ ਤੋਂ ਆਇਆ ਮਾਲ ਆਪੇ ਜੁੜਦਾ ਹੈ।',
+          'No stock yet. Say: “stock of flour is 20 sacks”. Goods bought from the wholesaler are added by themselves.',
+          'अभी कोई स्टॉक नहीं। बोलिए: “आटे का स्टॉक 20 बोरियां है”। थोक से आया माल अपने आप जुड़ता है।'))}</p>`}</div>`;
   const risky = d.customers.filter((c) => c.balance > 0 && c.score.band?.key === 'risky');
   const watch = d.customers.filter((c) => c.balance > 0 && c.score.band?.key === 'watch');
   const m = d.models || {};
@@ -757,6 +946,7 @@ async function renderInsights() {
           <div class="meta"><div class="nm">${esc(c.name)} ${c.name_roman !== c.name ? EN(c.name_roman, c.name_hi) : ''}</div>
           ${EN(c.score.reasons?.[0]?.en || '', c.score.reasons?.[0]?.hi, ' sub-meta')}</div>
           <div class="right"><div class="amt credit">${rs(c.balance)}</div>${badge(c.score)}</div></li>`).join('') || '<li class="empty">ਸਭ ਠੀਕ ਹੈ 👍 <span class="en">Nobody risky right now</span></li>'}</ul></div>
+    ${stockCard}
     <div class="card"><h3>ਮਾਡਲ <span class="en">Models behind this</span></h3><div class="model-grid">
       ${rr ? `<div class="metric"><span>Credit-risk model (gradient boosting) AUC</span><b>${rr.gradient_boosting.auc}</b></div>
         <div class="metric"><span class="muted">vs shopkeeper rule "oldest dues"</span><b>${rr.rule_oldest_dues.auc}</b></div>` : ''}
@@ -924,6 +1114,8 @@ async function boot() {
   } catch (_) {}
   refresh();
   loadSettings();
+  await updateQueueBadge();   // entries kept from an earlier visit go out now
+  if (queueCount) flushQueue();
 }
 if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 wrapPa(document);

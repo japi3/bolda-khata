@@ -15,7 +15,10 @@ from .. import config, db, repeat_detector
 from . import evon
 from .ensemble import EnsembleNLU
 from .translit import to_roman
-from .punjabi import amount_conflict, date_offset, find_numbers, normalize, pick_amount, pick_quantity
+from .bill import parse_bill
+from .query import parse_query
+from .stock_parse import parse_stock
+from .punjabi import amount_conflict, date_offset, find_numbers, normalize, pick_amount, pick_quantity, surface_tokens
 
 _nlu: EnsembleNLU | None = None
 TRANSACTIONAL = {"CREDIT", "PAYMENT", "SALE", "EXPENSE"}
@@ -57,6 +60,9 @@ def _not_a_name(name: str) -> bool:
 
 CREDIT_CUES = {normalize(w) for w in "ਉਧਾਰ ਉਧਾਰੀ उधार udhaar udhar udhari credit".split()}
 CASH_CUES = {normalize(w) for w in "ਨਕਦ ਕੈਸ਼ नकद कैश cash naqad nakad".split()}
+# buying stock for the shop: money going out, never a sale or a customer's credit
+RESTOCK = {normalize(w) for w in "ਥੋਕ ਹੋਲਸੇਲ ਮੰਡੀ ਸਪਲਾਇਰ ਡਿਸਟ੍ਰੀਬਿਊਟਰ थोक होलसेल मंडी सप्लायर डिस्ट्रीब्यूटर "
+           "wholesale wholesaler wholesalers mandi supplier distributor thok".split()}
 HONORIFICS = {normalize(w) for w in "ਜੀ ਸਾਹਿਬ ਸਾਬ".split()} | {"ji", "jee", "sahib", "sahab", "saab"}
 _GURMUKHI = re.compile(r"[\u0900-\u097F\u0A00-\u0A7F]")   # Gurmukhi or Devanagari
 
@@ -183,18 +189,60 @@ async def understand(transcript: str, audio: dict | None = None, customers: list
         settle = intent == "PAYMENT" and amount is None and bool(set(toks) & SETTLE_WORDS)
         engine = nlu().name
 
+    # Smart questions about the ledger ("who owes more than 5000?", "how much did Bittu take this month?",
+    # "who hasn't paid for a month?"): see nlu/query.py. Decided by explicit rules, answered from the database.
+    # Stock ("ਆਟੇ ਦੀਆਂ ਕਿੰਨੀਆਂ ਬੋਰੀਆਂ ਬਚੀਆਂ?", "ਸਟਾਕ ਵਿੱਚ 50 ਕਿੱਲੋ ਖੰਡ ਹੈ", "ਕਿਹੜਾ ਮਾਲ ਮੁੱਕਣ ਵਾਲਾ ਹੈ?"): nlu/stock_parse.py
+    stock_cmd = parse_stock(toks) if engine != "evon" and intent not in ("UNDO", "REMIND") else None
+    if stock_cmd:
+        intent = "STOCK"
+    query = None
+    if engine != "evon" and intent not in ("UNDO", "REMIND", "STOCK"):
+        query = parse_query(toks, resolve_customer(spoken, transcript, customers))
+        if query:
+            intent = "QUERY"
+
     # "udhaar" means credit, so it can never be a cash sale. Found on real recordings: when the customer's
     # name was lost at the start ("(Bittu) ko 320 udhaar diya"), the model guessed SALE and would have
     # silently booked credit as cash. As CREDIT with no name, the app asks "whose account?" instead.
     if intent == "SALE" and set(toks) & CREDIT_CUES and not set(toks) & CASH_CUES:
         intent = "CREDIT"
 
+    # Restocking ("10 sacks of flour from the wholesaler", "थोक से 20 पेटी तेल"): "bought" here is the shop
+    # buying, so it is an expense, not a sale, unless a saved customer is named.
+    restock = bool(set(toks) & RESTOCK) and intent in ("SALE", "CREDIT", "PAYMENT")
+    if restock and resolve_customer(spoken, transcript, customers)["status"] != "match":
+        intent = "EXPENSE"
+    else:
+        restock = False
+
+    # Multi-part bill in one sentence (qty × rate, several items, money paid now): see nlu/bill.py.
+    # The bill decides the amount; a named customer means it goes on their account (anything paid now
+    # becomes a linked payment), no customer means a cash sale, unless part of it was left unpaid.
+    bill = None
+    if engine != "evon" and intent in TRANSACTIONAL:
+        bill = parse_bill(toks, local["tags"], surface_tokens(transcript))
+    if bill:
+        amount = bill["total"]
+        names_in_bill = [ln["item"] for ln in bill["lines"] if ln["item"]]
+        item = ", ".join(dict.fromkeys(names_in_bill)) or item
+        if intent != "EXPENSE":   # restocking from a wholesaler stays an expense, with the computed total
+            who = resolve_customer(spoken, transcript, customers)
+            unpaid = bill["paid"] is None or bill["paid"] < bill["total"]
+            if who["status"] != "none":
+                intent = "CREDIT"
+            elif unpaid and (bill["paid"] is not None or set(toks) & CREDIT_CUES) and not (
+                    bill["paid"] is None and set(toks) & CASH_CUES):
+                intent = "CREDIT"   # part or all left unpaid, but no name: ask whose account
+            else:
+                intent = "SALE"
+
     doubt = False
-    if engine != "evon" and intent in ("CREDIT", "PAYMENT"):
+    if engine != "evon" and intent in ("CREDIT", "PAYMENT") and not bill:
         p = local.get("proba", {})
         doubt = p.get("PAYMENT" if intent == "CREDIT" else "CREDIT", 0.0) > DIRECTION_DOUBT
 
-    if intent in ("SALE", "EXPENSE", "SUMMARY", "DEBTORS", "UNDO", "OTHER"):
+    if intent in ("SALE", "EXPENSE", "SUMMARY", "DEBTORS", "UNDO", "OTHER", "STOCK") or (
+            intent == "QUERY" and query.get("customer_status") in (None, "none")):
         cust = {"status": "none", "id": None, "name": None, "candidates": []}
     else:
         cust = resolve_customer(spoken, transcript, customers)
@@ -203,8 +251,8 @@ async def understand(transcript: str, audio: dict | None = None, customers: list
         "intent": intent, "confidence": round(conf, 3), "engine": engine,
         "customer": cust, "amount": amount, "item": item, "quantity": qty, "unit": unit,
         "day_offset": day, "period": period, "settle_all": settle, "direction_doubt": doubt,
-        "cut_start": cut_off_start(toks),
-        "amount_options": amount_conflict(nums) if engine != "evon" and intent in TRANSACTIONAL else [],
+        "cut_start": cut_off_start(toks) and not restock, "bill": bill, "query": query, "stock": stock_cmd,
+        "amount_options": amount_conflict(nums) if engine != "evon" and intent in TRANSACTIONAL and not bill else [],
         "audio_check": repeat_detector.assess(local, transcript, audio) if intent in TRANSACTIONAL else None,
         "local": {k: local[k] for k in ("intent", "confidence", "alternatives", "names", "items", "masked",
                                          "tokens", "tags", "tag_confidence")}

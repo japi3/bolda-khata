@@ -138,6 +138,18 @@ body.lang-x .bubble.me .en { display: none; }
   background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--rule) 0); }
 .entry-row:last-child { background-image: none; }
 .entry .who { font-weight: 600; }
+/* multi-part bill: one ruled line per item, totals in bold */
+.bill-line { display: flex; justify-content: space-between; gap: 12px; padding: 6px 12px; font-size: 14px;
+  background-image: linear-gradient(to bottom, transparent calc(100% - 1px), var(--rule) 0); }
+.bill-line:last-child { background-image: none; }
+.bill-line > span:last-child { font-family: var(--latin); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.bill-line.bill-total { font-weight: 700; border-top: 1px solid var(--line); }
+.bill-line.payment > span:last-child { color: var(--green); }
+.bill-line.credit > span:last-child { color: var(--danger); }
+.bill-line.muted { color: var(--ink-2); }
+.bill-line.tap { cursor: pointer; }
+.bill-line.tap:hover, .bill-line.tap:active { background-color: var(--paper-2); }
+.muted-sub { font-size: 12px; color: var(--ink-2); margin-left: 4px; }
 .amt { font-family: var(--latin); font-weight: 700; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .amt.credit { color: var(--danger); }
 .amt.payment, .amt.sale { color: var(--green); }
@@ -325,3 +337,10 @@ body:has(#view-test.active) .dock, body:has(#view-test.active) .tabs { display: 
 .fail-type { margin-top: 10px; }
 .fail-type input { flex: 1; min-width: 0; padding: 9px 12px; border-radius: 10px; border: 1px solid var(--line);
   background: var(--paper); font-size: 15px; color: var(--ink); }
+
+/* offline queue: an entry kept on the phone, waiting to be sent */
+.bubble.me.queued { opacity: .85; border: 1.5px dashed rgba(255,255,255,.6); }
+.bubble.me.queued .muted { display: block; margin-top: 4px; font-size: 12.5px; color: inherit; opacity: .9; }
+.bubble.me .q-drop { margin-top: 8px; background: rgba(255,255,255,.15); color: inherit; border-color: rgba(255,255,255,.35); }
+.bill-line.low > span:last-child { color: var(--danger); font-weight: 700; }
+.bill-line.low .muted-sub { color: var(--danger); }

@@ -8,7 +8,7 @@ from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFil
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import actions, audio_quality, auth, config, db, gnani
+from . import stock, actions, audio_quality, auth, config, db, gnani
 from .ml import risk
 from .nlu import evon, parser
 from .nlu.datagen import ITEMS
@@ -134,6 +134,11 @@ YES_WORDS = {normalize(w) for w in
              "ਹਾਂ ਹਾਂਜੀ ਠੀਕ ਸਹੀ ਬਿਲਕੁਲ ਲਿਖ ਕਰ yes yeah yep ok okay correct right sure haan haanji theek sahi "
              "हां हाँ जी ठीक सही बिल्कुल".split()}
 NO_WORDS = {normalize(w) for w in "ਨਹੀਂ ਨਹੀ ਨਾ ਗਲਤ ਰੱਦ no nope wrong cancel nahi galat नहीं ना गलत रद्द".split()}
+# paid more than the bill: give the extra back, or keep it on the account
+CHANGE_WORDS = {normalize(w) for w in "ਵਾਪਸ ਮੋੜ ਮੋੜੋ ਮੋੜ ਦਿਓ ਚੇਂਜ ਭਾਨ change return back vapas wapas "
+                "वापस लौटा लौटाओ चेंज".split()}
+ADVANCE_WORDS = {normalize(w) for w in "ਐਡਵਾਂਸ ਰੱਖ ਰੱਖੋ ਰੱਖਣੇ ਜਮ੍ਹਾ advance keep jama rakh rakho "
+                 "एडवांस रख रखो रखने जमा".split()}
 
 
 def _merge_pending(pending: dict, cmd: dict, transcript: str) -> dict:
@@ -145,6 +150,11 @@ def _merge_pending(pending: dict, cmd: dict, transcript: str) -> dict:
             return {**pending, "intent": "PAYMENT" if pay else "CREDIT", "direction_confirmed": True,
                     "heard_confirmed": True, "awaiting": None,
                     "transcript": pending.get("transcript", "") + " | " + transcript}
+    if pending.get("awaiting") == "change":
+        back, keep = bool(toks & CHANGE_WORDS), bool(toks & ADVANCE_WORDS)
+        if back != keep:   # the question read back name, bill and money, so this also confirms them
+            return {**pending, "extra_choice": "change" if back else "advance", "heard_confirmed": True,
+                    "awaiting": None, "transcript": pending.get("transcript", "") + " | " + transcript}
     if pending.get("awaiting") == "heard" and len(toks) <= 4:
         if toks & YES_WORDS and not toks & NO_WORDS:
             return {**pending, "heard_confirmed": True, "awaiting": None,
@@ -167,14 +177,29 @@ def _merge_pending(pending: dict, cmd: dict, transcript: str) -> dict:
     return merged
 
 
+def _recorded_at(v) -> float | None:
+    """Time a queued recording was spoken (seconds or ms since epoch). Accepted only within the last 14 days
+    and not in the future, so a wrong phone clock can't put entries far away."""
+    try:
+        t = float(v)
+    except (TypeError, ValueError):
+        return None
+    if t > 1e12:   # milliseconds
+        t /= 1000
+    now = time.time()
+    return t if now - 14 * 86400 <= t <= now + 60 else None
+
+
 async def _handle(transcript: str, stt: dict | None, pending: dict | None, speak: bool = True,
-                  audio: dict | None = None, lang: str = "pa") -> dict:
+                  audio: dict | None = None, lang: str = "pa", recorded_at: float | None = None) -> dict:
     t0 = time.perf_counter()
     # the misheard-audio detector is calibrated on Punjabi recordings only
     cmd = await parser.understand(transcript, audio if lang == "pa" else None)
     cmd["transcript"] = transcript
     if pending:
         cmd = _merge_pending(pending, cmd, transcript)
+    if recorded_at:
+        cmd["recorded_at"] = recorded_at
     nlu_ms = round((time.perf_counter() - t0) * 1000)
     vid = db.log_voice(transcript=transcript, detected_lang=(stt or {}).get("detected_language_code"),
                        stt_ms=(stt or {}).get("latency_ms"), nlu_engine=cmd["engine"], nlu_ms=nlu_ms,
@@ -190,7 +215,7 @@ async def _handle(transcript: str, stt: dict | None, pending: dict | None, speak
         "transcript": transcript, "transcript_roman": to_roman(transcript),
         "command": {k: cmd[k] for k in ("intent", "confidence", "engine", "customer", "amount", "item",
                                         "quantity", "unit", "day_offset", "period", "settle_all", "local",
-                                        "evon_error", "audio_check")},
+                                        "evon_error", "audio_check")} | {"bill": cmd.get("bill"), "query": cmd.get("query")},
         "reply": reply, "audio_url": audio,
         "timings": {"stt_ms": (stt or {}).get("latency_ms"), "nlu_ms": nlu_ms, "tts_ms": tts_ms,
                     "local_nlu_ms": cmd["local"]["ms"] if "local" in cmd else None},
@@ -199,7 +224,7 @@ async def _handle(transcript: str, stt: dict | None, pending: dict | None, speak
 
 @app.post("/api/voice")
 async def voice(audio: UploadFile = File(...), pending: str | None = Form(None), speak: bool = Form(True),
-                lang: str = Form("pa")):
+                lang: str = Form("pa"), recorded_at: str | None = Form(None)):
     data = await audio.read()
     if len(data) < 1000:
         raise HTTPException(400, "audio too short")
@@ -226,7 +251,7 @@ async def voice(audio: UploadFile = File(...), pending: str | None = Form(None),
         return {"transcript": "", "reply": msg, "audio_url": await _speak(msg[lang], lang=lang) if speak else None,
                 "timings": {"stt_ms": stt.get("latency_ms")}}
     return await _handle(transcript, stt, json.loads(pending) if pending else None, speak=speak,
-                         audio=audio_feats, lang=lang)
+                         audio=audio_feats, lang=lang, recorded_at=_recorded_at(recorded_at))
 
 
 @app.post("/api/text")
@@ -234,7 +259,8 @@ async def text(body: dict = Body(...)):
     t = (body.get("text") or "").strip()
     if not t:
         raise HTTPException(400, "empty text")
-    return await _handle(t, None, body.get("pending"), speak=body.get("speak", True), lang=_lang(body.get("lang")))
+    return await _handle(t, None, body.get("pending"), speak=body.get("speak", True), lang=_lang(body.get("lang")),
+                         recorded_at=_recorded_at(body.get("recorded_at")))
 
 
 @app.post("/api/resolve")
@@ -252,6 +278,8 @@ async def resolve(body: dict = Body(...)):
         cmd["heard_confirmed"] = True
     if body.get("amount"):
         cmd["amount"], cmd["amount_options"], cmd["heard_confirmed"] = float(body["amount"]), [], True
+    if body.get("extra") in ("change", "advance"):
+        cmd["extra_choice"], cmd["heard_confirmed"] = body["extra"], True
     reply = await actions.execute(cmd)
     lang = _lang(body.get("lang"))
     return {"reply": reply, "audio_url": await _speak(reply[lang], lang=lang) if body.get("speak", True) else None}
@@ -324,6 +352,19 @@ def delete_txn(tid: int):
 @app.post("/api/txns/{tid}/restore")
 def restore_txn(tid: int):
     db.set_deleted(tid, False)
+    return {"ok": True}
+
+
+@app.get("/api/stock")
+def stock_levels():
+    """Every tracked item with its quantity now, in pa / en / hi, low items first."""
+    from .ledger_queries import _stock_row
+    return {"items": [_stock_row(lv) for lv in stock.levels()]}
+
+
+@app.post("/api/stock/undo/{move_id}")
+def stock_undo(move_id: int, body: dict = Body(default={})):
+    stock.undo_set(move_id, not body.get("restore"))
     return {"ok": True}
 
 

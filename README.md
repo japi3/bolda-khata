@@ -1,5 +1,7 @@
 # ਬੋਲਦਾ ਖਾਤਾ · Bolda Khata
 
+> 📄 **[One-page solution pitch → PITCH.md](PITCH.md)**
+
 **A bahi khata (credit ledger) that you talk to in Punjabi.** A kirana shopkeeper says
 *"ਰਮੇਸ਼ ਨੂੰ 500 ਦਾ ਆਟਾ ਉਧਾਰ ਦਿੱਤਾ"* ("gave Ramesh ₹500 of flour on credit"). The entry is
 written, the new balance is read back in a Punjabi voice, and an ML model warns the
@@ -16,7 +18,28 @@ Built for the Great Indian AI Internship Challenge on **Gnani AI** models:
 ## What it does
 
 - **Speak entries**: credit (ਉਧਾਰ), payments (ਜਮ੍ਹਾ, incl. "ਪੂਰਾ ਹਿਸਾਬ" = settle all), cash sales, expenses, back-dated ("ਕੱਲ੍ਹ").
+- **Whole bills in one sentence**: "ਜਸਵੀਰ ਲੈ ਗਿਆ ਦੋ ਲੀਟਰ ਦੁੱਧ 56 ਦਾ ਲੀਟਰ ਤੇ ਇੱਕ ਪੈਕਟ ਬਿਸਕੁਟ 20 ਦਾ, 100 ਦੇ ਗਿਆ"
+  (Jasvir took two litres of milk at ₹56 a litre and a ₹20 packet of biscuits, gave ₹100) → a bill card
+  (milk 2 L × ₹56 = ₹112, biscuits ₹20, total ₹132, ₹100 received, ₹32 due). The bill goes on the account as credit and
+  the money paid now as a linked payment, so **one undo removes both**. If the customer paid more than the bill, it asks
+  "₹360 ਵਾਪਸ ਦੇਣੇ ਹਨ ਜਾਂ ਐਡਵਾਂਸ ਰੱਖਣੇ?" (give ₹360 back, or keep it as advance?). With no name it is a cash sale, but if
+  part was left unpaid it asks whose account. Restocking ("ਥੋਕ ਤੋਂ 10 ਬੋਰੀਆਂ ਆਟਾ 800 ਰੁਪਏ ਬੋਰੀ", "10 sacks of flour from the
+  wholesaler at ₹800 a sack") becomes an expense of ₹8,000. Works in Punjabi, Hindi and English/Hinglish.
 - **Ask questions**: "ਰਮੇਸ਼ ਦੇ ਕਿੰਨੇ ਪੈਸੇ ਬਾਕੀ ਨੇ?" (how much does Ramesh owe?), "ਕਿਸ ਕਿਸ ਦੇ ਪੈਸੇ ਬਾਕੀ ਨੇ?" (who still owes money?), "ਇਸ ਹਫ਼ਤੇ ਦੀ ਵਿਕਰੀ?" (this week's sales?)
+- **Smart questions, answered exactly from the ledger** (never guessed by a model):
+  "ਪੰਜ ਹਜ਼ਾਰ ਤੋਂ ਵੱਧ ਕਿਸ ਕਿਸ ਵੱਲ ਬਾਕੀ ਹੈ?" (who owes more than ₹5,000?), "ਬਿੱਟੂ ਨੇ ਇਸ ਮਹੀਨੇ ਕਿੰਨਾ ਸਮਾਨ ਲਿਆ?"
+  (how much did Bittu take this month?), "ਕੱਲ੍ਹ ਕਿੰਨਾ ਉਧਾਰ ਗਿਆ?" (how much credit went out yesterday?),
+  "ਮਹੀਨੇ ਤੋਂ ਕਿਸ ਨੇ ਪੈਸੇ ਨਹੀਂ ਦਿੱਤੇ?" (who hasn't paid in a month?), "ਮਾਸਟਰ ਜੀ ਨੇ ਕੀ ਕੀ ਲਿਆ?" (what did Master ji take?).
+  Time windows: today, yesterday, day before, this/last week, this/last month, "last 10 days", so far. The answer is
+  spoken and shown as a list; tap a name to open that account. Same questions work in Hindi and English/Hinglish
+  ("Udhaar 5000 se upar kis kis ka hai?", "Who hasn't paid for two weeks?").
+- **Stock (ਸਟਾਕ)**: restocking from the wholesaler adds stock; sales and credit with a quantity take it away (undo
+  reverses it). Say a count ("ਆਟੇ ਦਾ ਸਟਾਕ 20 ਬੋਰੀਆਂ ਹੈ"), ask "ਆਟੇ ਦੀਆਂ ਕਿੰਨੀਆਂ ਬੋਰੀਆਂ ਬਚੀਆਂ?" or "ਕਿਹੜਾ ਮਾਲ ਮੁੱਕਣ ਵਾਲਾ ਹੈ?".
+  Items match across scripts (ਖੰਡ = चीनी = sugar). Low = at or below 20% of the last restock or count. Limit: g→kg,
+  ml→l and dozen→pieces convert; sacks and kg are kept separately. Tests: `scripts/eval_stock.py` (set 1, first run
+  23/23 + 9/9 + scenario right; blind set 2 first run 11/12 + 4/4 + scenario right, 12/12 after adding "ਰਹਿ").
+- **Offline queue**: if the shop computer, internet or Gnani can't be reached, entries are kept on the phone and sent
+  by themselves, in order, when the connection is back, written with the time they were spoken.
 - **Ask for advice**: "ਕੀ ਬਿੱਟੂ ਨੂੰ ਉਧਾਰ ਦੇਣਾ ਠੀਕ ਹੈ?" ("is it safe to give Bittu credit?") → trust score, the reasons, and a suggested credit limit.
 - **Talks back instead of guessing**: asks "ਕਿੰਨੇ ਪੈਸੇ?" ("how much?") when the amount is missing, "ਕਿਹੜਾ ਗੁਰਪ੍ਰੀਤ?" ("which Gurpreet?")
   when two customers share a name, and "ਜਮ੍ਹਾ ਜਾਂ ਉਧਾਰ?" ("received or credit?") when it is unsure of the direction.
@@ -178,6 +201,41 @@ read 100% as "works well", not "perfect".
   name/item F1 0.936 / 0.967 / 0.961.
 - Risk model AUC (held-out simulated customers): **0.831**, against 0.806 for the shopkeeper rule
   "oldest dues first" and 0.825 for logistic regression.
+
+### Multi-part bills (`eval/bill_test.py`, `python scripts/eval_bills.py`)
+
+The bill arithmetic is deterministic (`app/nlu/bill.py`): explicit rules decide whether each number is a quantity,
+a rate, an item price, a stated total or money paid now; the language model only labels the item names.
+
+| Set | Bill vs not a bill | Total right | Paid-now right |
+|---|---|---|---|
+| Held-out set 1 (30: 23 bills + 7 ordinary commands, pa/hi/en), **first run** | 29/30 | 18/23 | 18/23 |
+| Set 1 after general rule fixes | 30/30 | 23/23 | 23/23 |
+| Blind set 2 (12, written after those fixes), **first run** | 11/12 | 7/10 | 8/10 |
+| Set 2 after fixes | 12/12 | 10/10 | 10/10 |
+
+The first-run rows are the honest numbers; the fixed rows are no longer blind. Each fix was a general rule
+("56 ਦਾ ਲੀਟਰ" is a rate per litre, "100 ਦੇ ਗਿਆ" is money handed over, "500 का नोट" is paid, Google Pay/UPI count as
+paid, a bare count before an item, "gave 200"), not a copy of a test sentence. Ordinary single-amount commands are
+untouched: the hard sets above score the same with bills turned on, and the real-voice results below are unchanged.
+
+### Smart questions (`eval/query_test.py`, `python scripts/eval_queries.py`, `python scripts/eval_query_answers.py`)
+
+Which question was asked is decided by explicit word rules (`app/nlu/query.py`: question word + what it is about +
+time window); the numbers are plain SQL sums (`app/ledger_queries.py`).
+
+| Set | Questions understood exactly | Ordinary commands left alone |
+|---|---|---|
+| Set 1 (38 questions + 14 ordinary commands, pa/hi/en), written before the code, **first run** | 38/38 | 14/14 |
+| Blind set 2 (16 + 6, different wording, written after the code), **first run** | 14/16 | 6/6 |
+| Set 2 after two general fixes ("ਭਰੇ" = paid; Hindi "दो" before "हफ़्ते" = two) | 16/16 | 6/6 |
+
+- **Right numbers:** 16/16 questions get the exact total and the right names, on a throwaway ledger whose answers
+  were worked out by hand (`scripts/eval_query_answers.py`).
+- None of the 126 ledger entries in the hard sets (pa/en/hi) turns into a question by mistake. Two hard-set balance questions did
+  ("ਰਮੇਸ਼ ਦੀ ਉਧਾਰੀ ਕਿੰਨੀ ਹੋ ਗਈ?", "ਟੋਟਲ ਉਧਾਰ ਕਿੰਨਾ ਗਿਆ ਹੋਇਆ?"); the general rule now is that a credit question with
+  no time and no "took" asks what is owed *now*, which the balance / debtors answers give.
+- Caveat: set 1 is written by the same person as the rules, so its 38/38 says less than set 2's first run.
 
 **Honest caveats**
 - With 122 commands, one command is worth 0.8 points, so most gaps between the models are within noise.

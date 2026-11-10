@@ -1,7 +1,7 @@
 // Service worker: makes the app installable and lets the screen open without a connection.
 // App files are network-first (always fresh when online, last copy when offline).
 // The ledger API (/api/) is never cached, so no customer data is stored by the browser here.
-const CACHE = 'bolda-khata-v1';
+const CACHE = 'bolda-khata-v5';
 const SHELL = ['/', '/static/app.css', '/static/app.js', '/static/recorder.js', '/manifest.webmanifest',
   '/static/icons/icon-192.png'];
 

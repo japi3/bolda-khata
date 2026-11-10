@@ -155,10 +155,12 @@ def parse_number_span(toks: list[str]) -> float | None:
 
 
 UNIT_WORDS = {normalize(w) for w in
-              "ਕਿੱਲੋ ਗ੍ਰਾਮ ਲੀਟਰ ਪੈਕਟ ਦਰਜਨ ਬੋਰੀ ਪੀਸ ਡੱਬਾ ਡੱਬੇ ਬੋਤਲ ਬੋਤਲਾਂ ਕੱਪ ਗੱਟਾ ਥੈਲਾ ਪੇਟੀ".split()} | set(
+              "ਕਿੱਲੋ ਗ੍ਰਾਮ ਲੀਟਰ ਪੈਕਟ ਪੈਕਟਾਂ ਦਰਜਨ ਬੋਰੀ ਬੋਰੀਆਂ ਪੀਸ ਡੱਬਾ ਡੱਬੇ ਡੱਬਿਆਂ ਬੋਤਲ ਬੋਤਲਾਂ ਕੱਪ ਗੱਟਾ ਗੱਟੇ "
+              "ਥੈਲਾ ਥੈਲੇ ਪੇਟੀ ਪੇਟੀਆਂ".split()} | set(
     "kg kgs kilo kilos kilogram kilograms gram grams g litre litres liter liters l packet packets pack packs "
-    "dozen bag bags bottle bottles box boxes piece pieces pcs tin tins sack sacks cup cups".split()) | {
-    normalize(w) for w in "किलो ग्राम लीटर पैकेट दर्जन बोरी पीस डिब्बा डिब्बे बोतल बोतलें थैला पेटी".split()}
+    "dozen bag bags bottle bottles box boxes piece pieces pcs tin tins sack sacks cup cups crate crates".split()) | {
+    normalize(w) for w in "किलो ग्राम लीटर पैकेट पैकेटों दर्जन बोरी बोरियां बोरियाँ पीस डिब्बा डिब्बे डिब्बों बोतल बोतलें "
+    "थैला थैले पेटी पेटियां पेटियाँ".split()}
 ARTICLE_ONE = {normalize("ਇੱਕ"), normalize("ਇਕ"), "one", normalize("एक")}
 # Hindi "दो" is both "two" and "give" ("चढ़ा दो", "जोड़ दो"): a lone दो is a verb unless a unit/rupee follows
 AMBIGUOUS_TWO = {normalize("दो")}

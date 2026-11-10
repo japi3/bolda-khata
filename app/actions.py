@@ -6,7 +6,7 @@ The UI shows and Timbre speaks the one the shopkeeper chose.
 import re
 import time
 
-from . import db
+from . import db, stock
 from .ml import risk
 from .nlu import evon
 from .nlu.punjabi import rupees_text as R
@@ -36,6 +36,80 @@ def E(name: str | None) -> str:
 
 def _r(pa: str, en: str, hi: str, action: str, **data) -> dict:
     return {"pa": pa, "en": en, "hi": hi, "action": action, **data}
+
+
+# ---- bills: units and line text in each language
+_UNIT_GROUPS = {
+    "kg": ("ਕਿੱਲੋ", "kg", "किलो", "ਕਿੱਲੋ kg kgs kilo kilos kilogram kilograms किलो"),
+    "g": ("ਗ੍ਰਾਮ", "g", "ग्राम", "ਗ੍ਰਾਮ gram grams g ग्राम"),
+    "l": ("ਲੀਟਰ", "litre", "लीटर", "ਲੀਟਰ litre litres liter liters l लीटर"),
+    "pkt": ("ਪੈਕਟ", "packet", "पैकेट", "ਪੈਕਟ ਪੈਕਟਾਂ पैकेटों packet packets pack packs पैकेट"),
+    "dz": ("ਦਰਜਨ", "dozen", "दर्जन", "ਦਰਜਨ dozen दर्जन"),
+    "sack": ("ਬੋਰੀ", "sack", "बोरी", "ਬੋਰੀ ਬੋਰੀਆਂ ਗੱਟਾ ਗੱਟੇ बोरियां बोरियाँ sack sacks bag bags बोरी"),
+    "pc": ("ਪੀਸ", "piece", "पीस", "ਪੀਸ piece pieces pcs पीस"),
+    "box": ("ਡੱਬਾ", "box", "डिब्बा", "ਡੱਬਾ ਡੱਬੇ ਡੱਬਿਆਂ डिब्बों box boxes tin tins डिब्बा डिब्बे"),
+    "crate": ("ਪੇਟੀ", "crate", "पेटी", "ਪੇਟੀ ਪੇਟੀਆਂ पेटी पेटियां पेटियाँ crate crates"),
+    "btl": ("ਬੋਤਲ", "bottle", "बोतल", "ਬੋਤਲ ਬੋਤਲਾਂ bottle bottles बोतल बोतलें"),
+    "cup": ("ਕੱਪ", "cup", "कप", "ਕੱਪ cup cups"),
+    "thaila": ("ਥੈਲਾ", "bag", "थैला", "ਥੈਲਾ ਥੈਲੇ थैला थैले"),
+}
+
+
+def _unit(u: str | None) -> tuple[str, str, str]:
+    if not u:
+        return "", "", ""
+    from .nlu.punjabi import normalize
+    for pa, en, hi, words in _UNIT_GROUPS.values():
+        if u in {normalize(w) for w in words.split()}:
+            return pa, en, hi
+    return u, E(u), H(u)
+
+
+def _num(x: float) -> str:
+    return str(int(x)) if x == int(x) else f"{x:g}"
+
+
+def bill_lines(bill: dict) -> tuple[list[str], list[str], list[str]]:
+    """'ਚੌਲ 3 ਕਿੱਲੋ × ₹60 = ₹180' for each line, in pa / en / hi."""
+    pa, en, hi = [], [], []
+    for ln in bill["lines"]:
+        up, ue, uh = _unit(ln.get("unit"))
+        item = ln.get("item") or ""
+        ip, ie, ih = item or "ਸਮਾਨ", E(item) or "items", H(item) or "सामान"
+        if ln.get("rate") is not None:
+            q = _num(ln["qty"])
+            pa.append(f"{ip} {q} {up} × {R(ln['rate'])} = {R(ln['amount'])}".replace("  ", " "))
+            en.append(f"{ie} {q} {ue} × {R(ln['rate'])} = {R(ln['amount'])}".replace("  ", " "))
+            hi.append(f"{ih} {q} {uh} × {R(ln['rate'])} = {R(ln['amount'])}".replace("  ", " "))
+        else:
+            q = f" {_num(ln['qty'])} " if ln.get("qty") else " "
+            pa.append(f"{ip}{q}{up if ln.get('qty') else ''} {R(ln['amount'])}".replace("  ", " "))
+            en.append(f"{ie}{q}{ue if ln.get('qty') else ''} {R(ln['amount'])}".replace("  ", " "))
+            hi.append(f"{ih}{q}{uh if ln.get('qty') else ''} {R(ln['amount'])}".replace("  ", " "))
+    return pa, en, hi
+
+
+def bill_view(bill: dict, **extra) -> dict:
+    """The bill for the screen: numbers plus each line already written in pa / en / hi."""
+    p, e, h = bill_lines(bill)
+    return {**bill, **extra, "text": {"pa": p, "en": e, "hi": h}}
+
+
+def _bill_summary(bill: dict) -> tuple[str, str, str]:
+    """Spoken list of the lines, only when there is more than one line or a computed rate."""
+    if len(bill["lines"]) == 1 and bill["lines"][0].get("rate") is None:
+        return "", "", ""
+    p, e, h = bill_lines(bill)
+    return "ਬਿੱਲ: " + ", ".join(p) + "। ", "Bill: " + ", ".join(e) + ". ", "बिल: " + ", ".join(h) + "। "
+
+
+def entry_ts(cmd: dict) -> float | None:
+    """When the entry happened. A recording sent later from the phone's offline queue carries the time it was
+    spoken (recorded_at), so it lands on the right day; "ਕੱਲ੍ਹ" (yesterday) shifts from that time, not from now."""
+    ra = cmd.get("recorded_at")
+    if not ra:
+        return None
+    return ra + (cmd.get("day_offset") or 0) * 86400
 
 
 def _days_ago(ts: float | None) -> int | None:
@@ -134,6 +208,10 @@ def precheck(cmd: dict) -> tuple[dict | None, float | None]:
                       "ask_amount", pending=cmd), amount
         if intent in ("CREDIT", "PAYMENT") and (cust["status"] == "none" or not cust["name"]):
             return _ask_customer(cmd), amount
+        bill = cmd.get("bill")
+        if (intent == "CREDIT" and bill and bill.get("paid") is not None and bill["paid"] > bill["total"]
+                and not cmd.get("extra_choice")):
+            return _ask_change(cmd, bill), amount
         check = cmd.get("audio_check") or {}
         if check.get("unsure") and not cmd.get("heard_confirmed"):
             return _confirm_heard(cmd, intent, amount, check), amount
@@ -153,13 +231,21 @@ def precheck(cmd: dict) -> tuple[dict | None, float | None]:
 async def execute(cmd: dict, voice_id: int | None = None) -> dict:
     intent = cmd["intent"]
     cust = cmd["customer"]
+    if intent == "STOCK" and cmd.get("stock"):
+        from .ledger_queries import stock_answer   # stock: counted, left, running low
+        return stock_answer(cmd)
+    if intent == "QUERY" and cmd.get("query"):
+        from .ledger_queries import answer   # smart questions, answered exactly from the ledger
+        return answer(cmd)
     question, amount = precheck(cmd)
     if question:
         return question
     if intent in KIND:
         if intent in ("CREDIT", "PAYMENT"):
-            return await _customer_txn(cmd, intent, amount, voice_id)
-        return _shop_txn(cmd, intent, amount, voice_id)
+            reply = await _customer_txn(cmd, intent, amount, voice_id)
+        else:
+            reply = _shop_txn(cmd, intent, amount, voice_id)
+        return _with_stock(reply, KIND[intent], cmd)
 
     if intent == "BALANCE":
         if cust["status"] == "none":   # no name said ("ਕਿੰਨੇ ਪੈਸੇ?"): ask whose, don't claim it wasn't found
@@ -217,9 +303,27 @@ async def execute(cmd: dict, voice_id: int | None = None) -> dict:
 
     if intent == "UNDO":
         t = db.last_txn()
+        ls = stock.last_set()
+        if ls and (not t or ls["created_at"] > t["created_at"]):   # the last thing said was a stock count
+            stock.undo_set(ls["id"])
+            p, e, h = stock.names(ls["item_key"]) if ls["item_key"] in stock.CATALOG else (ls["item_key"],) * 3
+            return _r(f"ਸਟਾਕ ਦੀ ਪਿਛਲੀ ਗਿਣਤੀ ({p}) ਕੱਟ ਦਿੱਤੀ।", f"Removed the last stock count ({e}).",
+                      f"स्टॉक की पिछली गिनती ({h}) हटा दी।", "undone")
         if not t:
             return _r("ਕੱਟਣ ਲਈ ਕੋਈ ਐਂਟਰੀ ਨਹੀਂ ਹੈ।", "There is no entry to undo.", "हटाने के लिए कोई एंट्री नहीं है।", "none")
         db.set_deleted(t["id"], True)
+        if t.get("group_id"):
+            g = db.group_txns(t["group_id"])
+            bill = next((x for x in g if x["kind"] == "credit"), t)
+            got = sum(x["amount"] for x in g if x["kind"] == "payment")
+            c = bill["customer"]
+            gp = f", {R(got)} ਜਮ੍ਹਾ" if got else ""
+            ge = f", {R(got)} received" if got else ""
+            gh = f", {R(got)} जमा" if got else ""
+            return _r(f"ਪਿਛਲਾ ਪੂਰਾ ਬਿੱਲ ({c}, {R(bill['amount'])} ਉਧਾਰ{gp}) ਕੱਟ ਦਿੱਤਾ।",
+                      f"Removed the whole last bill ({E(c)}, {R(bill['amount'])} credit{ge}).",
+                      f"पिछला पूरा बिल ({H(c)}, {R(bill['amount'])} उधार{gh}) हटा दिया।",
+                      "undone", txn_id=t["id"], group_id=t["group_id"])
         k = t["kind"]
         kp = {"credit": "ਉਧਾਰ", "payment": "ਜਮ੍ਹਾ", "sale": "ਵਿਕਰੀ", "expense": "ਖਰਚਾ"}[k]
         kh = {"credit": "उधार", "payment": "जमा", "sale": "बिक्री", "expense": "खर्चा"}[k]
@@ -287,8 +391,27 @@ def _ask_customer(cmd) -> dict:
                   "I didn't catch the beginning. Which customer? Please say the name.",
                   "शुरू की बात पूरी नहीं सुनी। किस ग्राहक की बात है? नाम बताइए।", "ask_customer",
                   pending={**cmd, "cut_start": False, "heard_confirmed": True})
+    bill = cmd.get("bill")
+    if bill and bill.get("paid") and bill["due"] > 0:   # part paid, rest must go on someone's account
+        return _r(f"{R(bill['total'])} ਦੇ ਬਿੱਲ ਵਿੱਚੋਂ {R(bill['paid'])} ਮਿਲੇ, {R(bill['due'])} ਬਾਕੀ। ਕਿਸ ਦੇ ਖਾਤੇ ਵਿੱਚ ਲਿਖਾਂ?",
+                  f"{R(bill['paid'])} received on a {R(bill['total'])} bill, {R(bill['due'])} left. "
+                  f"Whose account should I write it to?",
+                  f"{R(bill['total'])} के बिल में से {R(bill['paid'])} मिले, {R(bill['due'])} बाकी। किसके खाते में लिखूं?",
+                  "ask_customer", bill=bill_view(bill), pending=cmd)
     return _r("ਕਿਸ ਦੇ ਖਾਤੇ ਵਿੱਚ? ਗਾਹਕ ਦਾ ਨਾਮ ਦੱਸੋ।", "Which customer's account? Please say the name.",
               "किसके खाते में? ग्राहक का नाम बताइए।", "ask_customer", pending=cmd)
+
+
+def _ask_change(cmd, bill) -> dict:
+    """Paid more than the bill: give the extra back now, or keep it on the account as advance?
+    The question repeats the name, bill and money given, so answering it also confirms what was heard."""
+    n = cmd["customer"]["name"]
+    paid, total = bill["paid"], bill["total"]
+    extra = round(paid - total, 2)
+    return _r(f"{n} ਨੇ {R(paid)} ਦਿੱਤੇ, ਬਿੱਲ {R(total)} ਦਾ ਹੈ। {R(extra)} ਵਾਪਸ ਦੇਣੇ ਹਨ ਜਾਂ ਐਡਵਾਂਸ ਰੱਖਣੇ ਹਨ?",
+              f"{E(n)} gave {R(paid)} for a {R(total)} bill. Give {R(extra)} back as change, or keep it as advance?",
+              f"{H(n)} ने {R(paid)} दिए, बिल {R(total)} का है। {R(extra)} वापस देने हैं या एडवांस रखने हैं?",
+              "ask_change", extra=extra, bill=bill_view(bill), pending={**cmd, "awaiting": "change"})
 
 
 def _confirm_heard(cmd, intent, amount, check) -> dict:
@@ -300,6 +423,12 @@ def _confirm_heard(cmd, intent, amount, check) -> dict:
           "SALE": f"{R(amount)} cash sale", "EXPENSE": f"{R(amount)} expense"}[intent]
     wh = {"CREDIT": f"{H(n)} को {R(amount)} उधार", "PAYMENT": f"{H(n)} से {R(amount)} जमा",
           "SALE": f"{R(amount)} नकद बिक्री", "EXPENSE": f"{R(amount)} खर्चा"}[intent]
+    bill = cmd.get("bill")
+    if intent == "CREDIT" and bill and bill.get("paid"):
+        p = R(bill["paid"])
+        wp += f", {p} ਮਿਲੇ"
+        we += f", {p} received now"
+        wh += f", {p} मिले"
     pa, en, hi = f"ਮੈਂ ਸੁਣਿਆ: {wp}। ਠੀਕ ਹੈ?", f"I heard: {we}. Is that right?", f"मैंने सुना: {wh}। ठीक है?"
     if check.get("noisy"):
         pa += " ਰੌਲਾ ਬਹੁਤ ਹੈ, ਫ਼ੋਨ ਮੂੰਹ ਦੇ ਨੇੜੇ ਰੱਖੋ।"
@@ -321,8 +450,10 @@ async def _customer_txn(cmd, intent, amount, voice_id) -> dict:
     cid, is_new = (cust["id"], False) if cust["id"] else db.get_or_create_customer(cust["name"])
     kind = KIND[intent]
     before = risk.score_customer(cid) if (intent == "CREDIT" and not is_new) else None
+    if intent == "CREDIT" and cmd.get("bill"):
+        return _bill_credit(cmd, cid, is_new, before, voice_id)
     tid = db.add_txn(kind, amount, customer_id=cid, item=cmd.get("item"), quantity=cmd.get("quantity"),
-                     unit=cmd.get("unit"), day_offset=cmd.get("day_offset") or 0, voice_id=voice_id)
+                     unit=cmd.get("unit"), day_offset=cmd.get("day_offset") or 0, voice_id=voice_id, ts=entry_ts(cmd))
     c = db.customer(cid)
     n, bal = c["name"], c["balance"]
     off = cmd.get("day_offset") or 0
@@ -359,20 +490,130 @@ async def _customer_txn(cmd, intent, amount, voice_id) -> dict:
     return _r(pa, en, hi, "txn", txn_id=tid, customer_id=cid, new_customer=is_new)
 
 
+def _with_stock(reply: dict, kind: str, cmd: dict) -> dict:
+    """Stock follows the ledger: restocking adds, sales and credit take away (tied to the entry, so undo
+    reverses it). The reply mentions the new level after restocking, or a warning when an item runs low."""
+    if not reply.get("txn_id") or kind == "payment":
+        return reply
+    changes = stock.record_entry(reply["txn_id"], kind, cmd)
+    if not changes:
+        return reply
+    p, e, h = _stock_note(changes)
+    return {**reply, "pa": reply["pa"] + p, "en": reply["en"] + e, "hi": reply["hi"] + h, "stock_changes": changes}
+
+
+def _stock_note(changes: list[dict]) -> tuple[str, str, str]:
+    """After an entry: restocked items say their new level; sold items say so only when running low."""
+    pa = en = hi = ""
+    for ch in changes:
+        p, e, h = stock.names(ch["key"])
+        qp, qe, qh = stock.qty_text(ch["qty_now"], ch["unit"])
+        if ch["in"]:
+            pa += f" ਸਟਾਕ: {p} ਹੁਣ {qp}।"
+            en += f" Stock: {e} now {qe}."
+            hi += f" स्टॉक: {h} अब {qh}।"
+        elif ch["qty_now"] <= 0:
+            pa += f" ਧਿਆਨ ਦਿਓ: {p} ਮੁੱਕ ਗਿਆ।"
+            en += f" Note: out of {e}."
+            hi += f" ध्यान दें: {h} ख़त्म हो गया।"
+        elif ch["low"]:
+            pa += f" ਧਿਆਨ ਦਿਓ: {p} ਸਿਰਫ਼ {qp} ਬਚਿਆ।"
+            en += f" Note: only {qe} of {e} left."
+            hi += f" ध्यान दें: {h} सिर्फ़ {qh} बचा।"
+    return pa, en, hi
+
+
+def _bill_note(bill: dict) -> str:
+    return "; ".join(bill_lines(bill)[0])
+
+
+def _bill_credit(cmd, cid, is_new, before, voice_id) -> dict:
+    """A whole bill on a customer's account: the bill as credit, money given now as a payment.
+    Both entries share one group id, so a single undo removes the whole bill."""
+    import uuid
+    bill = cmd["bill"]
+    total, paid = bill["total"], bill.get("paid") or 0
+    extra = round(paid - total, 2) if paid > total else 0
+    keep_advance = extra > 0 and cmd.get("extra_choice") == "advance"
+    paid_in = paid if (extra == 0 or keep_advance) else total
+    group = uuid.uuid4().hex[:12]
+    off = cmd.get("day_offset") or 0
+    tid = db.add_txn("credit", total, customer_id=cid, item=cmd.get("item"), note=_bill_note(bill),
+                     day_offset=off, voice_id=voice_id, group_id=group, ts=entry_ts(cmd))
+    pay_id = None
+    if paid_in > 0:
+        pay_id = db.add_txn("payment", paid_in, customer_id=cid, note="ਬਿੱਲ ਵੇਲੇ ਮਿਲੇ", day_offset=off,
+                            voice_id=voice_id, group_id=group, ts=entry_ts(cmd))
+    c = db.customer(cid)
+    n, bal = c["name"], c["balance"]
+    sp, se, sh = _bill_summary(bill)
+    pa = f"{sp}{n} ਦੇ ਖਾਤੇ ਵਿੱਚ {R(total)} ਦਾ ਬਿੱਲ ਲਿਖਿਆ"
+    en = f"{se}Wrote a {R(total)} bill to {E(n)}'s account"
+    hi = f"{sh}{H(n)} के खाते में {R(total)} का बिल लिखा"
+    if paid_in > 0:
+        pa += f", {R(paid_in)} ਮਿਲੇ"
+        en += f", {R(paid_in)} received"
+        hi += f", {R(paid_in)} मिले"
+    pa, en, hi = pa + "।", en + ".", hi + "।"
+    if extra > 0 and not keep_advance:
+        pa += f" {R(extra)} ਵਾਪਸ ਦੇਣੇ ਹਨ।"
+        en += f" Give {R(extra)} back as change."
+        hi += f" {R(extra)} वापस देने हैं।"
+    if bal > 0:
+        pa += f" ਕੁੱਲ ਬਕਾਇਆ {R(bal)}।"
+        en += f" Total due {R(bal)}."
+        hi += f" कुल बकाया {R(bal)}।"
+    elif bal == 0:
+        pa += " ਖਾਤਾ ਸਾਫ਼ ਹੈ।"
+        en += " Account is clear."
+        hi += " खाता साफ़ है।"
+    else:
+        pa += f" {R(-bal)} ਐਡਵਾਂਸ ਜਮ੍ਹਾ ਹਨ।"
+        en += f" {R(-bal)} held as advance."
+        hi += f" {R(-bal)} एडवांस जमा हैं।"
+    if is_new:
+        pa, en, hi = (f"{n} ਦਾ ਨਵਾਂ ਖਾਤਾ ਖੋਲ੍ਹਿਆ। " + pa, f"Opened a new account for {E(n)}. " + en,
+                      f"{H(n)} का नया खाता खोला। " + hi)
+    warning = None
+    on_credit = total - paid_in
+    if (on_credit > 0 and before and before["trust"] is not None and before["band"]["key"] == "risky"
+            and not before["low_data"]):
+        pa += f" ਧਿਆਨ ਦਿਓ, {n} ਦਾ ਭਰੋਸਾ ਸਕੋਰ {before['trust']} ਹੈ।"
+        en += f" Careful: {E(n)}'s trust score is {before['trust']}."
+        hi += f" ध्यान दीजिए, {H(n)} का भरोसा स्कोर {before['trust']} है।"
+        warning = before
+    return _r(pa, en, hi, "txn", txn_id=tid, payment_id=pay_id, group_id=group, customer_id=cid,
+              new_customer=is_new, risk_warning=warning,
+              bill=bill_view(bill, paid_in=paid_in, change=extra if not keep_advance else 0, balance=bal))
+
+
 def _shop_txn(cmd, intent, amount, voice_id) -> dict:
     kind = KIND[intent]
-    tid = db.add_txn(kind, amount, item=cmd.get("item"), quantity=cmd.get("quantity"), unit=cmd.get("unit"),
-                     day_offset=cmd.get("day_offset") or 0, voice_id=voice_id)
+    bill = cmd.get("bill")
+    tid = db.add_txn(kind, amount, item=cmd.get("item"), quantity=None if bill else cmd.get("quantity"),
+                     unit=None if bill else cmd.get("unit"), note=_bill_note(bill) if bill else None,
+                     day_offset=cmd.get("day_offset") or 0, voice_id=voice_id, ts=entry_ts(cmd))
     s, e = db.period_bounds("today")
     today = db.summary(s, e)
+    sp, se, sh = _bill_summary(bill) if bill else ("", "", "")
+    extra = round(bill["paid"] - bill["total"], 2) if bill and bill.get("paid") and bill["paid"] > bill["total"] else 0
+    cp = f" {R(extra)} ਵਾਪਸ ਦੇਣੇ ਹਨ।" if extra else ""
+    ce = f" Give {R(extra)} back as change." if extra else ""
+    ch = f" {R(extra)} वापस देने हैं।" if extra else ""
+    # a cash sale's bill shows the money received; a restocking bill is money paid out, so no "received" line
+    data = ({"bill": bill_view(bill, paid_in=min(bill.get("paid") or amount, amount) if intent == "SALE" else 0,
+                               change=extra if intent == "SALE" else 0, paid=None if intent != "SALE" else bill.get("paid"))}
+            if bill else {})
     if intent == "SALE":
-        return _r(f"{R(amount)} ਦੀ ਨਕਦ ਵਿਕਰੀ ਲਿਖ ਲਈ। ਅੱਜ ਦੀ ਕੁੱਲ ਵਿਕਰੀ {R(today['sale'])}।",
-                  f"Recorded a cash sale of {R(amount)}. Today's sales: {R(today['sale'])}.",
-                  f"{R(amount)} की नकद बिक्री लिख ली। आज की कुल बिक्री {R(today['sale'])}।", "txn", txn_id=tid)
+        return _r(f"{sp}{R(amount)} ਦੀ ਨਕਦ ਵਿਕਰੀ ਲਿਖ ਲਈ।{cp} ਅੱਜ ਦੀ ਕੁੱਲ ਵਿਕਰੀ {R(today['sale'])}।",
+                  f"{se}Recorded a cash sale of {R(amount)}.{ce} Today's sales: {R(today['sale'])}.",
+                  f"{sh}{R(amount)} की नकद बिक्री लिख ली।{ch} आज की कुल बिक्री {R(today['sale'])}।", "txn",
+                  txn_id=tid, **data)
     item = cmd.get("item")
-    return _r(f"{R(amount)} ਦਾ ਖਰਚਾ{f' ({item})' if item else ''} ਲਿਖ ਲਿਆ।",
-              f"Recorded an expense of {R(amount)}{f' ({E(item)})' if item else ''}.",
-              f"{R(amount)} का खर्चा{f' ({H(item)})' if item else ''} लिख लिया।", "txn", txn_id=tid)
+    return _r(f"{sp}{R(amount)} ਦਾ ਖਰਚਾ{f' ({item})' if item and not bill else ''} ਲਿਖ ਲਿਆ।",
+              f"{se}Recorded an expense of {R(amount)}{f' ({E(item)})' if item and not bill else ''}.",
+              f"{sh}{R(amount)} का खर्चा{f' ({H(item)})' if item and not bill else ''} लिख लिया।", "txn",
+              txn_id=tid, **data)
 
 
 def _risk_reply(cid: int) -> dict:

@@ -33,7 +33,8 @@ CREATE TABLE IF NOT EXISTS txns (
     created_at REAL NOT NULL,
     source TEXT NOT NULL DEFAULT 'voice',
     voice_id INTEGER,
-    deleted INTEGER NOT NULL DEFAULT 0
+    deleted INTEGER NOT NULL DEFAULT 0,
+    group_id TEXT                -- entries written together (a bill's credit + payment) share this
 );
 CREATE INDEX IF NOT EXISTS ix_txn_customer ON txns(customer_id, ts);
 CREATE TABLE IF NOT EXISTS voice_log (
@@ -48,6 +49,19 @@ CREATE TABLE IF NOT EXISTS voice_log (
     created_at REAL NOT NULL
 );
 CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT);
+-- stock moves: +qty in (restocking), -qty out (sold / taken on credit), or a counted stock (kind 'set', stored
+-- as the difference). A move tied to a ledger entry disappears with that entry's undo.
+CREATE TABLE IF NOT EXISTS stock_moves (
+    id INTEGER PRIMARY KEY,
+    item_key TEXT NOT NULL,
+    unit TEXT NOT NULL,
+    qty REAL NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('in','out','set')),
+    txn_id INTEGER REFERENCES txns(id),
+    created_at REAL NOT NULL,
+    deleted INTEGER NOT NULL DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS ix_stock_item ON stock_moves(item_key, unit);
 """
 
 
@@ -67,6 +81,10 @@ def con() -> sqlite3.Connection:
     if _con is None:
         _con = connect()
         _con.executescript(SCHEMA)
+        cols = {r["name"] for r in _con.execute("PRAGMA table_info(txns)")}
+        if "group_id" not in cols:   # databases created before bills existed
+            _con.execute("ALTER TABLE txns ADD COLUMN group_id TEXT")
+            _con.commit()
     return _con
 
 
@@ -150,15 +168,16 @@ def balance(cid: int) -> float:
 def add_txn(kind: str, amount: float, customer_id: int | None = None, item: str | None = None,
             quantity: float | None = None, unit: str | None = None, note: str | None = None,
             day_offset: int = 0, source: str = "voice", voice_id: int | None = None,
-            ts: float | None = None) -> int:
+            ts: float | None = None, group_id: str | None = None) -> int:
     now = time.time()
     if ts is None:
         ts = now + day_offset * 86400
     with tx() as c:
         cur = c.execute(
-            "INSERT INTO txns(customer_id,kind,amount_paise,item,quantity,unit,note,ts,created_at,source,voice_id)"
-            " VALUES(?,?,?,?,?,?,?,?,?,?,?)",
-            (customer_id, kind, int(round(amount * 100)), item, quantity, unit, note, ts, now, source, voice_id))
+            "INSERT INTO txns(customer_id,kind,amount_paise,item,quantity,unit,note,ts,created_at,source,voice_id,group_id)"
+            " VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            (customer_id, kind, int(round(amount * 100)), item, quantity, unit, note, ts, now, source, voice_id,
+             group_id))
         return cur.lastrowid
 
 
@@ -166,7 +185,7 @@ def _txn_row(r) -> dict:
     return {"id": r["id"], "customer_id": r["customer_id"], "customer": r["cname"], "kind": r["kind"],
             "amount": r["amount_paise"] / 100, "item": r["item"], "quantity": r["quantity"],
             "unit": r["unit"], "note": r["note"], "ts": r["ts"], "source": r["source"],
-            "deleted": bool(r["deleted"])}
+            "deleted": bool(r["deleted"]), "group_id": r["group_id"], "created_at": r["created_at"]}
 
 
 def txns(customer_id: int | None = None, limit: int = 50, include_deleted=False) -> list[dict]:
@@ -193,8 +212,19 @@ def last_txn() -> dict | None:
 
 
 def set_deleted(tid: int, deleted: bool = True):
+    """Deleting (or restoring) one entry of a bill affects the whole bill (its credit + payment)."""
     with tx() as c:
-        c.execute("UPDATE txns SET deleted=? WHERE id=?", (1 if deleted else 0, tid))
+        r = c.execute("SELECT group_id FROM txns WHERE id=?", (tid,)).fetchone()
+        if r and r["group_id"]:
+            c.execute("UPDATE txns SET deleted=? WHERE group_id=?", (1 if deleted else 0, r["group_id"]))
+        else:
+            c.execute("UPDATE txns SET deleted=? WHERE id=?", (1 if deleted else 0, tid))
+
+
+def group_txns(group_id: str) -> list[dict]:
+    return [_txn_row(r) for r in con().execute(
+        "SELECT t.*, c.name cname FROM txns t LEFT JOIN customers c ON c.id=t.customer_id WHERE t.group_id=? "
+        "ORDER BY t.id", (group_id,))]
 
 
 def customer_events(cid: int) -> list[tuple[float, str, float]]:
@@ -215,6 +245,51 @@ def period_bounds(period: str, day_offset: int = 0) -> tuple[float, float]:
         return start.timestamp(), now.timestamp() + 1
     day = start_today + timedelta(days=day_offset)
     return day.timestamp(), (day + timedelta(days=1)).timestamp()
+
+
+def window_bounds(window: str, n: int | None = None) -> tuple[float, float]:
+    """Time range for a smart question: today / yesterday / day_before / this_week / last_week /
+    this_month / last_month / days (last n days, today included) / all."""
+    now = datetime.now()
+    start_today = now.replace(hour=0, minute=0, second=0, microsecond=0)
+    if window in ("today", "yesterday", "day_before"):
+        return period_bounds("today", {"today": 0, "yesterday": -1, "day_before": -2}[window])
+    if window == "this_week":
+        return period_bounds("week")
+    if window == "this_month":
+        return period_bounds("month")
+    if window == "last_week":
+        this_week = start_today - timedelta(days=start_today.weekday())
+        return (this_week - timedelta(days=7)).timestamp(), this_week.timestamp()
+    if window == "last_month":
+        this_month = start_today.replace(day=1)
+        prev = (this_month - timedelta(days=1)).replace(day=1)
+        return prev.timestamp(), this_month.timestamp()
+    if window == "days":
+        return (start_today - timedelta(days=max(1, n or 1) - 1)).timestamp(), now.timestamp() + 1
+    return 0.0, now.timestamp() + 1
+
+
+def txns_between(start: float, end: float, kind: str | None = None, customer_id: int | None = None) -> list[dict]:
+    q = ("SELECT t.*, c.name cname FROM txns t LEFT JOIN customers c ON c.id=t.customer_id "
+         "WHERE t.deleted=0 AND t.ts>=? AND t.ts<?")
+    args: list = [start, end]
+    if kind:
+        q += " AND t.kind=?"
+        args.append(kind)
+    if customer_id:
+        q += " AND t.customer_id=?"
+        args.append(customer_id)
+    return [_txn_row(r) for r in con().execute(q + " ORDER BY t.ts DESC, t.id DESC", args)]
+
+
+def customer_activity() -> dict[int, dict]:
+    """customer_id -> {first_ts, last_payment_ts} (for "who hasn't paid in a month?")."""
+    out = {}
+    for r in con().execute("SELECT customer_id, MIN(ts) first_ts, MAX(CASE WHEN kind='payment' THEN ts END) last_pay "
+                           "FROM txns WHERE deleted=0 AND customer_id IS NOT NULL GROUP BY customer_id"):
+        out[r["customer_id"]] = {"first_ts": r["first_ts"], "last_payment_ts": r["last_pay"]}
+    return out
 
 
 def summary(start: float, end: float) -> dict:
