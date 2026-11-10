@@ -252,8 +252,28 @@ HF_HUB_DISABLE_XET=1 .venv/bin/python scripts/train_transformer.py  # MuRIL, ~6 
 HF_HUB_DISABLE_XET=1 .venv/bin/uvicorn app.main:app --port 8000
 ```
 Open http://localhost:8000, tap the mic (or press Space) and speak Punjabi. The app works
-without the MuRIL weights too; it falls back to the MEMM alone. On a phone the mic needs
-HTTPS, so use a free tunnel such as `cloudflared tunnel --url http://localhost:8000`.
+without the MuRIL weights too; it falls back to the MEMM alone.
+
+### On your phone
+
+A phone's microphone only works over HTTPS, so the app is reached through a free Cloudflare quick
+tunnel (no account, no card). Your Mac stays the server and must be on and online while you use it.
+
+```bash
+brew install cloudflared                 # once
+.venv/bin/python scripts/phone.py        # starts the app + link, prints a QR code
+```
+
+1. Scan the QR code with the phone camera, or open the `https://….trycloudflare.com` link.
+2. Enter the **PIN** (`APP_PIN` in `.env`; change it there and restart). Wrong PINs are rate-limited
+   (5 per 10 minutes per device), and a correct PIN keeps the phone signed in for 30 days.
+3. Allow the microphone.
+4. Install it: Android Chrome → menu ⋮ → **Install app**; iPhone Safari → Share → **Add to Home Screen**.
+
+The link is different every time and stops when you press Ctrl+C. The script refuses to run without
+a PIN, because anyone with the link reaches the login screen. The app is installable (manifest,
+icons, service worker), opens without a connection (showing an offline banner), and unlocks audio
+on the first tap so iPhones play the spoken replies.
 
 Re-run the evaluations:
 ```bash

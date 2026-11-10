@@ -162,9 +162,12 @@ async def execute(cmd: dict, voice_id: int | None = None) -> dict:
         return _shop_txn(cmd, intent, amount, voice_id)
 
     if intent == "BALANCE":
+        if cust["status"] == "none":   # no name said ("ਕਿੰਨੇ ਪੈਸੇ?"): ask whose, don't claim it wasn't found
+            return _r("ਕਿਸ ਦਾ ਹਿਸਾਬ? ਗਾਹਕ ਦਾ ਨਾਮ ਦੱਸੋ।", "Whose account? Please say the name.",
+                      "किसका हिसाब? ग्राहक का नाम बताइए।", "ask_customer", pending=cmd)
         if not cust["id"]:
-            return _r("ਇਸ ਨਾਮ ਦਾ ਕੋਈ ਖਾਤਾ ਨਹੀਂ ਮਿਲਿਆ।", "No account found with that name.",
-                      "इस नाम का कोई खाता नहीं मिला।", "not_found")
+            return _r(f"'{cust['name']}' ਨਾਮ ਦਾ ਕੋਈ ਖਾਤਾ ਨਹੀਂ ਮਿਲਿਆ।", f"No account found for '{E(cust['name'])}'.",
+                      f"'{H(cust['name'])}' नाम का कोई खाता नहीं मिला।", "not_found")
         c = db.customer(cust["id"])
         n, b = c["name"], c["balance"]
         last_pay = next((t for t in db.txns(cust["id"], 200) if t["kind"] == "payment"), None)

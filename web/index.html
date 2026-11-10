@@ -9,9 +9,28 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Baloo+Paaji+2:wght@500;600;700;800&family=Noto+Sans+Gurmukhi:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Bolda Khata">
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%237a1c1c'/><text x='32' y='45' font-size='36' text-anchor='middle' fill='%23f2b134' font-family='sans-serif' font-weight='700'>ਖ</text></svg>">
 </head>
 <body>
+<div class="pin-screen" id="pinScreen" hidden>
+  <div class="pin-box">
+    <div class="logo" aria-hidden="true">ਖ</div>
+    <h2>ਬੋਲਦਾ ਖਾਤਾ</h2>
+    <p>ਪਿੰਨ ਦਰਜ ਕਰੋ · पिन डालें · Enter PIN</p>
+    <form id="pinForm" autocomplete="off">
+      <input id="pinInput" inputmode="numeric" pattern="[0-9]*" maxlength="8" autocomplete="one-time-code" aria-label="PIN">
+      <button class="btn primary" type="submit">ਖੋਲ੍ਹੋ · खोलें · Open</button>
+    </form>
+    <div class="pin-msg" id="pinMsg"></div>
+  </div>
+</div>
+<div class="offline-bar" id="offlineBar" hidden>ਇੰਟਰਨੈੱਟ ਨਹੀਂ · इंटरनेट नहीं · You're offline</div>
 <div class="layout">
   <main class="app" id="app">
     <header class="topbar">

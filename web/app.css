@@ -63,7 +63,9 @@ body.lang-x .bubble.me .en { display: none; }
 
 /* top bar */
 .topbar {
-  display: flex; align-items: center; justify-content: space-between; padding: 14px 16px 12px;
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  /* leave room for the phone's status bar (clock, battery) when installed full-screen */
+  padding: calc(14px + env(safe-area-inset-top, 0px)) calc(16px + env(safe-area-inset-right, 0px)) 12px calc(16px + env(safe-area-inset-left, 0px));
   background: var(--red); color: #fff; position: relative;
   background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 2px, transparent 2px 6px);
 }
@@ -297,3 +299,24 @@ body.lang-x .bubble.me .en { display: none; }
 .test-result .detail { font-family: var(--latin); font-size: 12px; color: var(--ink-2); }
 body:has(#view-test.active) .dock, body:has(#view-test.active) .tabs { display: none; }
 #view-test { padding-bottom: 40px; }
+
+/* PIN screen + offline bar (phone version) */
+.pin-screen { position: fixed; inset: 0; z-index: 100; display: grid; place-items: center; padding: calc(24px + env(safe-area-inset-top, 0px)) 24px 24px;
+  background: var(--red); background-image: repeating-linear-gradient(90deg, rgba(255,255,255,.035) 0 2px, transparent 2px 6px); }
+.pin-box { background: var(--paper); border-radius: 24px; padding: 28px 22px; width: 100%; max-width: 340px; text-align: center; box-shadow: var(--shadow); }
+.pin-box .logo { margin: 0 auto 6px; width: 56px; height: 56px; font-size: 32px; }
+.pin-box h2 { font-family: var(--display); margin: 6px 0 2px; color: var(--red); }
+.pin-box p { margin: 0 0 16px; font-size: 14px; color: var(--ink-2); }
+#pinInput { width: 100%; font-family: var(--latin); font-size: 28px; letter-spacing: .4em; text-align: center; padding: 12px;
+  border-radius: 14px; border: 1.5px solid var(--line); background: var(--card); margin-bottom: 12px; color: var(--ink); }
+#pinForm .btn { width: 100%; }
+.pin-msg { min-height: 20px; margin-top: 10px; color: var(--danger); font-size: 14px; font-family: var(--latin); }
+.offline-bar { position: fixed; top: env(safe-area-inset-top, 0px); left: 0; right: 0; z-index: 50; background: var(--amber); color: #fff; text-align: center;
+  font-size: 13px; padding: 4px 8px; }
+
+/* narrow phones: let the shop name shrink so it never runs under the language switch */
+.brand > div { min-width: 0; }
+@media (max-width: 400px) {
+  .shop { font-size: 17px; }
+  .lang-switch button { padding: 4px 7px; font-size: 12px; }
+}

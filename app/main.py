@@ -4,11 +4,11 @@ import time
 from pathlib import Path
 from urllib.parse import quote
 
-from fastapi import Body, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import Body, FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
-from . import actions, audio_quality, config, db, gnani
+from . import actions, audio_quality, auth, config, db, gnani
 from .ml import risk
 from .nlu import evon, parser
 from .nlu.datagen import ITEMS
@@ -17,6 +17,32 @@ from .nlu.translit import to_roman
 
 WEB = config.ROOT / "web"
 app = FastAPI(title="Bahi Khata")
+
+
+@app.middleware("http")
+async def _pin_lock(request, call_next):
+    """With APP_PIN set, the API needs the session cookie from /api/login (see app/auth.py)."""
+    if auth.needs_auth(request.url.path) and not auth.valid(request.cookies.get(auth.COOKIE)):
+        return JSONResponse({"detail": "PIN required"}, status_code=401)
+    return await call_next(request)
+
+
+@app.get("/api/auth")
+def auth_status(request: Request):
+    return {"pin_required": auth.enabled(), "ok": not auth.enabled() or auth.valid(request.cookies.get(auth.COOKIE))}
+
+
+@app.post("/api/login")
+def login(request: Request, body: dict = Body(...)):
+    cid = auth.client_id(request)
+    if auth.locked_out(cid):
+        raise HTTPException(429, "Too many wrong PINs. Wait 10 minutes.")
+    if not auth.check_pin(cid, body.get("pin", "")):
+        raise HTTPException(401, "Wrong PIN")
+    resp = JSONResponse({"ok": True})
+    https = request.headers.get("x-forwarded-proto") == "https" or request.url.scheme == "https"
+    resp.set_cookie(auth.COOKIE, auth.make_token(), max_age=auth.MAX_AGE, httponly=True, samesite="lax", secure=https)
+    return resp
 
 
 @app.middleware("http")
@@ -43,6 +69,17 @@ def _startup():
 @app.get("/")
 def index():
     return FileResponse(WEB / "index.html")
+
+
+@app.get("/manifest.webmanifest")
+def manifest():
+    return FileResponse(WEB / "manifest.webmanifest", media_type="application/manifest+json")
+
+
+@app.get("/sw.js")
+def service_worker():
+    # served from the root so it can control the whole app
+    return FileResponse(WEB / "sw.js", media_type="text/javascript", headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/api/health")

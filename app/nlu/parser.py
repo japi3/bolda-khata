@@ -41,6 +41,20 @@ def cut_off_start(toks: list[str]) -> bool:
     return toks[0] in _DANGLING or toks[0] in _BARE_VERB_EN
 
 
+# Words that can never be a customer's name (question / money / time words). Real use: "Kinne paise?"
+# ("how much money?") had "Kinne" tagged as a name, so the app replied "no account found".
+_NOT_NAMES = {normalize(w) for w in (
+    "ਕਿੰਨੇ ਕਿੰਨਾ ਕਿੰਨੀ ਕੌਣ ਕਿਸ ਕੀ ਕਿਵੇਂ ਪੈਸੇ ਪੈਸਾ ਰੁਪਏ ਅੱਜ ਕੱਲ੍ਹ ਹਿਸਾਬ ਖਾਤਾ ਬਾਕੀ ਸਾਰੇ "
+    "कितने कितना कितनी कौन किस क्या कैसे पैसे पैसा रुपये आज कल हिसाब खाता बाकी सारे "
+    "kinne kinna kinni kitne kitna kitni kaun kis kya kaise paise paisa rupees aaj kal hisaab hisab khata baaki baki "
+    "how much what who which money today yesterday total balance").split()}
+
+
+def _not_a_name(name: str) -> bool:
+    words = normalize(name).split()
+    return not words or all(w in _NOT_NAMES for w in words)
+
+
 CREDIT_CUES = {normalize(w) for w in "ਉਧਾਰ ਉਧਾਰੀ उधार udhaar udhar udhari credit".split()}
 CASH_CUES = {normalize(w) for w in "ਨਕਦ ਕੈਸ਼ नकद कैश cash naqad nakad".split()}
 HONORIFICS = {normalize(w) for w in "ਜੀ ਸਾਹਿਬ ਸਾਬ".split()} | {"ji", "jee", "sahib", "sahab", "saab"}
@@ -162,7 +176,7 @@ async def understand(transcript: str, audio: dict | None = None, customers: list
         engine = "evon"
     else:
         intent, conf = local["intent"], local["confidence"]
-        spoken = local["names"][0] if local["names"] else None
+        spoken = next((n for n in local["names"] if not _not_a_name(n)), None)
         item = local["items"][0] if local["items"] else None
         day = date_offset(toks)
         period = _period(toks)

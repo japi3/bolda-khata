@@ -134,6 +134,7 @@ const audio = new Audio();
 // ------------------------------------------------------------------ api
 async function api(path, opts = {}) {
   const r = await fetch(path, { headers: opts.body && !(opts.body instanceof FormData) ? { 'Content-Type': 'application/json' } : {}, ...opts });
+  if (r.status === 401 && path !== '/api/login') { showPin(); throw new Error('PIN required'); }
   if (!r.ok) {
     let msg = r.statusText;
     try { msg = (await r.json()).detail || msg; } catch (_) {}
@@ -143,7 +144,39 @@ async function api(path, opts = {}) {
 }
 const post = (p, body) => api(p, { method: 'POST', body: body instanceof FormData ? body : JSON.stringify(body) });
 
+// ------------------------------------------------------------------ PIN lock (phone link)
+function showPin(msg = '') {
+  $('#pinScreen').hidden = false;
+  $('#pinMsg').textContent = msg;
+  setTimeout(() => $('#pinInput').focus(), 50);
+}
+$('#pinForm').onsubmit = async (e) => {
+  e.preventDefault();
+  const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pin: $('#pinInput').value }) });
+  if (r.ok) { $('#pinScreen').hidden = true; $('#pinInput').value = ''; boot(); return; }
+  $('#pinInput').value = '';
+  showPin(r.status === 429 ? 'Too many tries. Wait 10 minutes.' : 'ਗਲਤ ਪਿੰਨ · गलत पिन · Wrong PIN');
+};
+
+// ------------------------------------------------------------------ offline banner
+const setOffline = () => ($('#offlineBar').hidden = navigator.onLine);
+window.addEventListener('online', setOffline);
+window.addEventListener('offline', setOffline);
+setOffline();
+
 // ------------------------------------------------------------------ audio
+// iPhones only allow audio that a tap started. Play a silent clip on the first tap so later
+// replies (which arrive after a network round trip) are allowed to play.
+const SILENT = 'data:audio/wav;base64,UklGRiQAAABXQVZFZm10IBAAAAABAAEAQB8AAIA+AAACABAAZGF0YQAAAAA=';
+let audioUnlocked = false;
+function unlockAudio() {
+  if (audioUnlocked) return;
+  audioUnlocked = true;
+  try { audio.src = SILENT; audio.play().catch(() => {}); } catch (_) {}
+}
+document.addEventListener('pointerdown', unlockAudio, { capture: true });
+
 async function speak(text, btn, voice) {
   try {
     const { audio_url } = await post('/api/tts', { text, voice, lang });
@@ -781,7 +814,15 @@ try { enPref = localStorage.getItem('en') ?? '1'; } catch (_) {}
 setSubs(enPref === '1');
 $$('.lang-switch button').forEach((b) => (b.onclick = () => setLang(b.dataset.lang)));
 
+async function boot() {
+  try {
+    const st = await (await fetch('/api/auth')).json();
+    if (st.pin_required && !st.ok) { showPin(); return; }
+  } catch (_) {}
+  refresh();
+  loadSettings();
+}
+if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
 wrapPa(document);
 applyLang();
-refresh();
-loadSettings();
+boot();
