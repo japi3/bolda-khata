@@ -1,0 +1,11 @@
+.env
+*.db
+__pycache__/
+.venv/
+node_modules/
+models/muril/
+models/dev/
+data/
+.DS_Store
+.claude/
+*.pyc

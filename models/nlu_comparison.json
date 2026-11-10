@@ -1,0 +1,128 @@
+{
+ "n": 122,
+ "conditions": {
+  "text": {
+   "memm": {
+    "fully_correct": 0.951,
+    "intent_acc": 0.959,
+    "amount_acc": 1.0,
+    "customer_acc": 0.97,
+    "ms_per_utterance": 1.9
+   },
+   "muril": {
+    "fully_correct": 0.967,
+    "intent_acc": 0.967,
+    "amount_acc": 1.0,
+    "customer_acc": 1.0,
+    "ms_per_utterance": 18.2
+   },
+   "ensemble": {
+    "fully_correct": 0.967,
+    "intent_acc": 0.967,
+    "amount_acc": 1.0,
+    "customer_acc": 1.0,
+    "ms_per_utterance": 20.7
+   }
+  },
+  "clean": {
+   "memm": {
+    "fully_correct": 0.918,
+    "intent_acc": 0.943,
+    "amount_acc": 0.986,
+    "customer_acc": 0.955,
+    "ms_per_utterance": 1.8
+   },
+   "muril": {
+    "fully_correct": 0.967,
+    "intent_acc": 0.975,
+    "amount_acc": 0.986,
+    "customer_acc": 0.985,
+    "ms_per_utterance": 18.0
+   },
+   "ensemble": {
+    "fully_correct": 0.967,
+    "intent_acc": 0.975,
+    "amount_acc": 0.986,
+    "customer_acc": 0.985,
+    "ms_per_utterance": 22.5
+   }
+  },
+  "noisy": {
+   "memm": {
+    "fully_correct": 0.902,
+    "intent_acc": 0.934,
+    "amount_acc": 0.957,
+    "customer_acc": 0.97,
+    "ms_per_utterance": 1.9
+   },
+   "muril": {
+    "fully_correct": 0.959,
+    "intent_acc": 0.984,
+    "amount_acc": 0.957,
+    "customer_acc": 1.0,
+    "ms_per_utterance": 17.9
+   },
+   "ensemble": {
+    "fully_correct": 0.959,
+    "intent_acc": 0.984,
+    "amount_acc": 0.957,
+    "customer_acc": 1.0,
+    "ms_per_utterance": 20.5
+   }
+  },
+  "loud": {
+   "memm": {
+    "fully_correct": 0.467,
+    "intent_acc": 0.697,
+    "amount_acc": 0.529,
+    "customer_acc": 0.716,
+    "ms_per_utterance": 1.9
+   },
+   "muril": {
+    "fully_correct": 0.492,
+    "intent_acc": 0.689,
+    "amount_acc": 0.5,
+    "customer_acc": 0.746,
+    "ms_per_utterance": 17.9
+   },
+   "ensemble": {
+    "fully_correct": 0.508,
+    "intent_acc": 0.705,
+    "amount_acc": 0.5,
+    "customer_acc": 0.746,
+    "ms_per_utterance": 20.1
+   }
+  }
+ },
+ "prisma_cer": {
+  "clean": 0.0816,
+  "noisy": 0.0815,
+  "loud": 0.4752
+ },
+ "direction_check": {
+  "text": {
+   "n": 46,
+   "wrong_direction_saved": 0,
+   "asked": 1,
+   "asked_but_model_was_right": 0
+  },
+  "clean": {
+   "n": 45,
+   "wrong_direction_saved": 0,
+   "asked": 1,
+   "asked_but_model_was_right": 1
+  },
+  "noisy": {
+   "n": 46,
+   "wrong_direction_saved": 0,
+   "asked": 0,
+   "asked_but_model_was_right": 0
+  },
+  "loud": {
+   "n": 40,
+   "wrong_direction_saved": 1,
+   "asked": 8,
+   "asked_but_model_was_right": 1
+  }
+ }
+}

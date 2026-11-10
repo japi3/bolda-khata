@@ -1,0 +1,170 @@
+<!doctype html>
+<html lang="pa">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#7a1c1c">
+  <title>ਬੋਲਦਾ ਖਾਤਾ · Bolda Khata</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Baloo+Paaji+2:wght@500;600;700;800&family=Noto+Sans+Gurmukhi:wght@400;500;600;700&family=Noto+Sans+Devanagari:wght@400;500;600;700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/app.css">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%237a1c1c'/><text x='32' y='45' font-size='36' text-anchor='middle' fill='%23f2b134' font-family='sans-serif' font-weight='700'>ਖ</text></svg>">
+</head>
+<body>
+<div class="layout">
+  <main class="app" id="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="logo" aria-hidden="true">ਖ</div>
+        <div>
+          <div class="shop" id="shopName">ਬੋਲਦਾ ਖਾਤਾ</div>
+          <div class="sub en">Bolda Khata · voice ledger</div>
+        </div>
+      </div>
+      <div class="lang-switch" role="group" aria-label="Language"><button data-lang="pa">ਪੰਜਾਬੀ</button><button data-lang="hi">हिंदी</button><button data-lang="en">English</button></div>
+    </header>
+
+    <!-- HOME -->
+    <section class="view active" id="view-home">
+      <div class="stats" id="stats"></div>
+      <div class="feed" id="feed">
+        <div class="welcome" id="welcome">
+          <div class="welcome-title" data-en="Sat Sri Akal 🙏" data-hi="नमस्ते जी 🙏">ਸਤ ਸ੍ਰੀ ਅਕਾਲ ਜੀ 🙏</div>
+          <p data-en="Tap the mic and speak in English or Hinglish, the khata writes itself." data-hi="माइक दबाइए और हिंदी में बोलिए, खाता अपने आप लिखा जाएगा।">ਮਾਈਕ ਦਬਾਓ ਤੇ ਬੋਲੋ, ਖਾਤਾ ਆਪੇ ਲਿਖਿਆ ਜਾਊ।</p>
+          <p class="en sub-only">Tap the mic and speak in Punjabi, the khata writes itself.</p>
+          <div class="examples" id="examples"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CUSTOMERS -->
+    <section class="view" id="view-customers">
+      <div class="search-row">
+        <input id="search" type="search" placeholder="ਗਾਹਕ ਲੱਭੋ… / Search" data-ph-en="Search customers…" autocomplete="off">
+      </div>
+      <div class="total-banner" id="totalBanner"></div>
+      <ul class="cust-list" id="custList"></ul>
+    </section>
+
+    <!-- INSIGHTS -->
+    <section class="view" id="view-insights">
+      <div id="insights"></div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section class="view" id="view-settings">
+      <form class="card settings" id="settingsForm">
+        <h3>ਦੁਕਾਨ <span class="en">Shop</span></h3>
+        <label>ਦੁਕਾਨ ਦਾ ਨਾਮ <span class="en">Shop name</span>
+          <input name="shop_name" required></label>
+        <label>ਅੰਗਰੇਜ਼ੀ ਵਿੱਚ ਨਾਮ <span class="en">Shop name (English)</span>
+          <input name="shop_name_en" placeholder="Sharma Kirana Store"></label>
+        <label>ਹਿੰਦੀ ਵਿੱਚ ਨਾਮ <span class="en">Shop name (Hindi)</span>
+          <input name="shop_name_hi" placeholder="शर्मा किराना स्टोर"></label>
+        <label>ਮਾਲਕ ਦਾ ਨਾਮ <span class="en">Owner</span>
+          <input name="owner_name"></label>
+        <label>ਫ਼ੋਨ <span class="en">Phone</span>
+          <input name="shop_phone" inputmode="tel"></label>
+        <button class="btn primary" type="submit">ਸੰਭਾਲੋ <span class="en">Save</span></button>
+      </form>
+      <div class="card">
+        <h3>ਭਾਸ਼ਾ <span class="en">Language</span></h3>
+        <div class="lang-switch big" role="group" aria-label="Language"><button data-lang="pa">ਪੰਜਾਬੀ</button><button data-lang="hi">हिंदी</button><button data-lang="en">English</button></div>
+        <label class="check"><input type="checkbox" id="subToggle" checked> ਪੰਜਾਬੀ ਦੇ ਹੇਠਾਂ ਅੰਗਰੇਜ਼ੀ <span class="en">Show English subtitles in Punjabi mode</span></label>
+      </div>
+      <div class="card">
+        <h3>ਆਵਾਜ਼ ਟੈਸਟ <span class="en">Voice testing</span></h3>
+        <p class="muted" style="margin:0 0 10px;font-size:14px">ਅਸਲੀ ਲੋਕਾਂ ਦੀਆਂ ਆਵਾਜ਼ਾਂ ਨਾਲ ਐਪ ਦੀ ਜਾਂਚ। ਖਾਤੇ ਵਿੱਚ ਕੁਝ ਨਹੀਂ ਲਿਖਿਆ ਜਾਂਦਾ। <span class="en">Record real people to measure the app. Nothing is written to the ledger; recordings stay on this computer.</span></p>
+        <button class="btn gold" type="button" id="openTest">🎙 ਟੈਸਟ ਸ਼ੁਰੂ ਕਰੋ <span class="en">Start testing</span></button>
+      </div>
+      <div class="card" id="healthCard"></div>
+      <div class="card">
+        <h3>ਲਿਖ ਕੇ ਪੁੱਛੋ <span class="en">Type instead of speaking</span></h3>
+        <form id="typeForm" class="type-row">
+          <input id="typeInput" placeholder="ਰਮੇਸ਼ ਨੂੰ 500 ਉਧਾਰ ਦਿੱਤਾ" data-ph-en="Gave Ramesh 500 on credit" autocomplete="off">
+          <button class="btn" type="submit" data-en="Send">ਭੇਜੋ</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- REAL-VOICE TESTING -->
+    <section class="view" id="view-test">
+      <div class="test-top">
+        <button class="icon-btn" id="closeTest" type="button">← <span data-en="Back">ਵਾਪਸ</span></button>
+        <div class="test-stats" id="testStats"></div>
+      </div>
+      <div class="card test-setup">
+        <div class="seg" id="testMode">
+          <button data-mode="free" aria-pressed="true">ਆਪਣੇ ਸ਼ਬਦਾਂ ਵਿੱਚ <span class="en">Say it your way</span></button>
+          <button data-mode="read">ਪੜ੍ਹ ਕੇ ਬੋਲੋ <span class="en">Read this</span></button>
+        </div>
+        <div class="seg" id="testEnv">
+          <button data-env="quiet" aria-pressed="true">ਸ਼ਾਂਤ <span class="en">Quiet</span></button>
+          <button data-env="busy">ਭੀੜ <span class="en">Busy</span></button>
+          <button data-env="loud">ਬਹੁਤ ਰੌਲਾ <span class="en">Very noisy</span></button>
+        </div>
+        <input id="testSpeaker" placeholder="ਬੋਲਣ ਵਾਲਾ (ਨਾਮ ਜਾਂ ਨਿਸ਼ਾਨ) / speaker (name or initials)" data-ph-en="Speaker (name or initials)" autocomplete="off">
+      </div>
+      <div class="card test-card">
+        <div class="test-count" id="testCount"></div>
+        <div class="test-prompt" id="testPrompt"></div>
+        <div class="test-hint" id="testHint"></div>
+        <button class="mic test-mic" id="testMic" type="button" aria-label="Record">
+          <svg viewBox="0 0 24 24" class="ic-mic"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3m-3 0h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          <svg viewBox="0 0 24 24" class="ic-stop"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+        </button>
+        <div class="test-result" id="testResult"></div>
+        <div class="row-btns" style="justify-content:center">
+          <button class="btn" id="testSkip" type="button" data-en="Skip">ਛੱਡੋ</button>
+          <button class="btn primary" id="testNext" type="button" data-en="Next">ਅਗਲਾ</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- mic dock -->
+    <div class="dock" id="dock">
+      <div class="live" id="live" hidden>
+        <span class="live-dot"></span><span id="liveText">ਸੁਣ ਰਿਹਾ ਹਾਂ…</span>
+      </div>
+      <button class="mic" id="mic" aria-label="Speak / ਬੋਲੋ">
+        <svg viewBox="0 0 24 24" class="ic-mic"><path d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Z"/><path d="M19 11a7 7 0 0 1-14 0M12 18v3m-3 0h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <svg viewBox="0 0 24 24" class="ic-stop"><rect x="7" y="7" width="10" height="10" rx="2"/></svg>
+        <span class="ring" id="ring"></span>
+      </button>
+    </div>
+
+    <nav class="tabs" id="tabs">
+      <button data-view="home" class="active"><svg viewBox="0 0 24 24"><path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span data-en="Home">ਘਰ</span></button>
+      <button data-view="customers"><svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.6 3.3-5.5 6.5-5.5s5.9 1.9 6.5 5.5"/><circle cx="17" cy="9" r="2.6"/><path d="M16 14.6c2.8-.3 5 1.3 5.5 4.4"/></svg><span data-en="Customers">ਗਾਹਕ</span></button>
+      <span class="tab-gap"></span>
+      <button data-view="insights"><svg viewBox="0 0 24 24"><path d="M4 20V10m6 10V4m6 16v-7m4 7H2"/></svg><span data-en="Insights">ਸੂਝ</span></button>
+      <button data-view="settings"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z"/></svg><span data-en="Settings">ਸੈਟਿੰਗ</span></button>
+    </nav>
+
+    <!-- customer sheet -->
+    <div class="sheet-backdrop" id="sheetBackdrop" hidden></div>
+    <aside class="sheet" id="sheet" aria-hidden="true"></aside>
+    <div class="toast" id="toast" hidden></div>
+  </main>
+
+  <!-- desktop-only: under the hood -->
+  <aside class="hood" id="hood">
+    <div class="hood-head">
+      <h2 data-en="Under the hood">ਅੰਦਰ ਕੀ ਹੋਇਆ</h2>
+      <div class="en sub-only">Under the hood: last voice command</div>
+    </div>
+    <ol class="pipeline" id="pipeline">
+      <li data-step="mic"><b>Mic</b><span>16 kHz WAV, auto-stop on silence</span><em></em></li>
+      <li data-step="stt"><b>Gnani Prisma v3.0</b><span>speech → text (pa-IN / en-IN)</span><em></em></li>
+      <li data-step="nlu"><b>On-device NLU</b><span>slot tagger + intent model</span><em></em></li>
+      <li data-step="evon"><b>Gnani Evon 30B</b><span>deep understanding (when enabled)</span><em></em></li>
+      <li data-step="ledger"><b>Ledger + Risk model</b><span>write entry, score customer</span><em></em></li>
+      <li data-step="tts"><b>Gnani Timbre</b><span>voice reply (Punjabi / English)</span><em></em></li>
+    </ol>
+    <div class="hood-detail" id="hoodDetail"><p class="muted">Speak a command to see each stage.</p></div>
+  </aside>
+</div>
+<script type="module" src="/static/app.js"></script>
+</body>
+</html>

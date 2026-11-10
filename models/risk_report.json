@@ -1,0 +1,37 @@
+{
+  "samples": 17974,
+  "customers": 8991,
+  "risky_rate": 0.2481,
+  "test": {
+    "rule_oldest_dues": {
+      "auc": 0.8057,
+      "precision_top20pct": 0.5994
+    },
+    "logistic_regression": {
+      "auc": 0.8246,
+      "precision_top20pct": 0.6259,
+      "brier": 0.1407
+    },
+    "gradient_boosting": {
+      "auc": 0.8308,
+      "precision_top20pct": 0.6189,
+      "brier": 0.1397
+    }
+  },
+  "permutation_importance_auc_drop": {
+    "wavg_unpaid_age": 0.0404,
+    "outstanding_months": 0.035,
+    "avg_days_to_repay": 0.0258,
+    "log_outstanding": 0.0256,
+    "on_time_rate": 0.0088,
+    "oldest_unpaid_days": 0.0069,
+    "days_since_payment": 0.0062,
+    "pay_credit_ratio_60d": 0.0055,
+    "days_since_credit": 0.0045,
+    "tenure_days": 0.0042,
+    "credit_trend": 0.0015,
+    "n_credits_60d": 0.0009,
+    "log_avg_credit": 0.0009
+  },
+  "seconds": 3.4
+}

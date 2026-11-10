@@ -1,0 +1,27 @@
+{
+  "random_split": {
+    "intent_accuracy": 0.9998,
+    "slot_f1": 0.9983,
+    "n": 4522
+  },
+  "unseen_templates": {
+    "intent_accuracy": 0.9147,
+    "slot_f1": 0.9107,
+    "n": 2028
+  },
+  "unseen_templates_per_intent": {
+    "BALANCE": 0.911,
+    "CREDIT": 0.914,
+    "DEBTORS": 0.951,
+    "EXPENSE": 0.994,
+    "OTHER": 0.734,
+    "PAYMENT": 0.895,
+    "REMIND": 0.974,
+    "RISK": 0.904,
+    "SALE": 0.891,
+    "SUMMARY": 0.926,
+    "UNDO": 0.933
+  },
+  "train_samples": 22610,
+  "seconds": 22.1
+}

@@ -1,0 +1,62 @@
+{
+ "n": 20,
+ "groups": {
+  "all": {
+   "n": 20,
+   "correct": 10,
+   "understood": 11,
+   "asked_needed": 6,
+   "wrong_silent": 3,
+   "asked_unneeded": 1,
+   "correct_understood": 11
+  },
+  "lang=pa": {
+   "n": 13,
+   "correct": 6,
+   "understood": 7,
+   "asked_needed": 4,
+   "asked_unneeded": 1,
+   "wrong_silent": 2
+  },
+  "env=quiet": {
+   "n": 20,
+   "correct": 10,
+   "understood": 11,
+   "asked_needed": 6,
+   "wrong_silent": 3,
+   "asked_unneeded": 1
+  },
+  "mode=read": {
+   "n": 20,
+   "correct": 10,
+   "understood": 11,
+   "asked_needed": 6,
+   "wrong_silent": 3,
+   "asked_unneeded": 1
+  },
+  "speaker=user": {
+   "n": 20,
+   "correct": 10,
+   "understood": 11,
+   "asked_needed": 6,
+   "wrong_silent": 3,
+   "asked_unneeded": 1
+  },
+  "lang=hi": {
+   "n": 4,
+   "wrong_silent": 1,
+   "understood": 3,
+   "correct": 3,
+   "asked_needed": 0,
+   "asked_unneeded": 0
+  },
+  "lang=en": {
+   "n": 3,
+   "asked_needed": 2,
+   "understood": 1,
+   "correct": 1,
+   "asked_unneeded": 0,
+   "wrong_silent": 0
+  }
+ }
+}

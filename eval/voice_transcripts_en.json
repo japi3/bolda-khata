@@ -1,0 +1,212 @@
+{
+ "0": {
+  "text": "Okay write it down, Bittu took two kilos of flour and a litre of oil, total 320 rupees.",
+  "clean": "Ok, write it down: Bittoo took 2 kilos of flour and a litre of oil, total 320 rupees.",
+  "noisy": "Ok, write it down: Bittoo took 2 kilos of flour and a litre of oil, total 320 rupees."
+ },
+ "1": {
+  "text": "Put 450 on Jasvir's account, he'll pay next week.",
+  "clean": "Put 450 on Jasveer's account, he'll pay next week.",
+  "noisy": "Put 450 on Jasveer's account, he'll pay next week."
+ },
+ "2": {
+  "text": "Master ji took groceries worth 1500 on credit.",
+  "clean": "Maastar Jee took groceries worth 1500 on credit.",
+  "noisy": "Maastar Jee took groceries worth 1,500 on credit."
+ },
+ "3": {
+  "text": "Kuldeep ko 600 udhaar diya, likh lo.",
+  "clean": "Kuldeep ko 600 udhaar diya, likh lo.",
+  "noisy": "Kuldeep ko 600 udhaar diya, likh lo."
+ },
+ "4": {
+  "text": "Gurpreet Singh, credit, 275.",
+  "clean": "Gurpreet Singh, credit 275.",
+  "noisy": "Gurpreet Singh, credit 275."
+ },
+ "5": {
+  "text": "Add another 150 to Pinky's tab.",
+  "clean": "Add another 150 to pinky tab.",
+  "noisy": "Add another 150 to Pinky's basket."
+ },
+ "6": {
+  "text": "Sukhwinder ke khate mein gas cylinder ke 1100 daal do.",
+  "clean": "Sukhvindar ke khate mein gas cylinder ke 1,100 dal do.",
+  "noisy": "Sukhvindar ke khate mein gas cylinder ke 1,100 dal do."
+ },
+ "7": {
+  "text": "New customer Lakhvir, gave him 350 on credit.",
+  "clean": "New customer Lakhvir gave him 350 on credit.",
+  "noisy": "New customer Lakhvir gave him 350 on credit."
+ },
+ "8": {
+  "text": "Ramesh took rice for 980, he hasn't paid.",
+  "clean": "Ramesh took rice for 980; he hasn't paid.",
+  "noisy": "Ramesh took rice for 980, but he hasn't paid."
+ },
+ "9": {
+  "text": "Simran's mother took 5 kg rice for 400, add it to Simran's account.",
+  "clean": "Simran's mother took 5 kilograms rice for 400, added to Simran's account.",
+  "noisy": "Simran's mother took 5 kilograms rice for 400, add it to Simran's account."
+ },
+ "10": {
+  "text": "Bittu came and paid 1000.",
+  "clean": "Bittoo came and paid 1000.",
+  "noisy": "Bittoo came and paid 1000."
+ },
+ "11": {
+  "text": "Jasvir sent 500 on Google Pay.",
+  "clean": "Jasveer sent 500 on Google Pay.",
+  "noisy": "Jasveer sent 500 on Google Pay."
+ },
+ "12": {
+  "text": "Received fifteen hundred from Harpreet Kaur.",
+  "clean": "Received 1500 from Harpreet Kaur.",
+  "noisy": "Received 1500 from Harpreet Kaur."
+ },
+ "13": {
+  "text": "Master ji cleared his whole account.",
+  "clean": "Maastar Jee cleared his whole account.",
+  "noisy": "Maastar Jee cleared his whole account."
+ },
+ "14": {
+  "text": "Kuldeep finally returned 200.",
+  "clean": "Kuldeep finally returned 200.",
+  "noisy": "Kuldeep finally returned 200."
+ },
+ "15": {
+  "text": "Pinky ne 300 cash de diye.",
+  "clean": "Pinkee ne 300 cash de diye.",
+  "noisy": "Pinkee ne 300 cash diti hai."
+ },
+ "16": {
+  "text": "Got 430 from Gurpreet through UPI.",
+  "clean": "Got 430 from Gurpreet through UPI.",
+  "noisy": "I've got 430 from Gurpreet through UPI."
+ },
+ "17": {
+  "text": "Sukhwinder deposited 2500, rest next month.",
+  "clean": "Sukhvindar deposited 2,500, rest next month.",
+  "noisy": "Sukhvindar deposited 2,500 rupees next month."
+ },
+ "18": {
+  "text": "Ramesh ka payment aa gaya, 700.",
+  "clean": "Ramesh ka payment aa gaya 700.",
+  "noisy": "Ramesh ka payment aa gaya 700 rupaye."
+ },
+ "19": {
+  "text": "Simran paid back 50 rupees.",
+  "clean": "Simran paid back 50 rupees.",
+  "noisy": "Simran paid back 50 rupees."
+ },
+ "20": {
+  "text": "A customer bought stuff for 260 and paid cash.",
+  "clean": "A customer bought stuff for 260 and paid cash.",
+  "noisy": "Customer bought stuff for 260 and paid cash."
+ },
+ "21": {
+  "text": "Cash sale, three hundred thirty.",
+  "clean": "Cash sale: 330.",
+  "noisy": "Cash sale: 330."
+ },
+ "22": {
+  "text": "Sold two dozen eggs for 168, got the money.",
+  "clean": "Sold 2 dozen eggs for 168. Got the money.",
+  "noisy": "Sold 2 dozen eggs for 168. Got the money."
+ },
+ "23": {
+  "text": "1200 ka maal becha cash mein.",
+  "clean": "1,200 ka maal becha cash mein.",
+  "noisy": "1,200 ka maal becha cash mein."
+ },
+ "24": {
+  "text": "Paid the electricity bill, 1870.",
+  "clean": "Paid the electricity bill, 1,870.",
+  "noisy": "Paid the electricity bill, 1870."
+ },
+ "25": {
+  "text": "Gave the helper his salary, 7000.",
+  "clean": "Gave the helper his salary, 7000.",
+  "noisy": "Gave the helper his salary, 7000."
+ },
+ "26": {
+  "text": "Shop rent paid, eight thousand.",
+  "clean": "Shop rent paid 8000.",
+  "noisy": "Shop rent paid 8,000."
+ },
+ "27": {
+  "text": "Spent 650 on fridge repair.",
+  "clean": "Spent 650 on fridge repair.",
+  "noisy": "I spent 650 on fridge repair."
+ },
+ "28": {
+  "text": "How much does Bittu owe me?",
+  "clean": "How much does Bittoo owe me?",
+  "noisy": "How much does Bittoo owe me?"
+ },
+ "29": {
+  "text": "What's Kuldeep's balance?",
+  "clean": "What's Kuldeep's balance?",
+  "noisy": "What's Kuldeep's balance?"
+ },
+ "30": {
+  "text": "Harpreet ka kitna baaki hai?",
+  "clean": "Harpreet ka kitna baaki hai?",
+  "noisy": "Harpreet ka kitna baaki hai?"
+ },
+ "31": {
+  "text": "Who all still owe me money?",
+  "clean": "Who all still owe me money?",
+  "noisy": "Who all still owe me money?"
+ },
+ "32": {
+  "text": "How much total udhaar is pending?",
+  "clean": "How much total udhaar is pending?",
+  "noisy": "How much total udhaar is pending?"
+ },
+ "33": {
+  "text": "How much did I earn today?",
+  "clean": "How much did I earn today?",
+  "noisy": "How much did I earn today?"
+ },
+ "34": {
+  "text": "What were the expenses this month?",
+  "clean": "What were the expenses this month?",
+  "noisy": "What were the expenses this month?"
+ },
+ "35": {
+  "text": "Send Kuldeep a reminder.",
+  "clean": "Send Kuldeep a reminder.",
+  "noisy": "Send Kuldeep a reminder."
+ },
+ "36": {
+  "text": "Bittu ko WhatsApp karo paise ke liye.",
+  "clean": "Bittoo ko WhatsApp karo paise ke liye.",
+  "noisy": "Bittoo ko WhatsApp karo paise ke liye."
+ },
+ "37": {
+  "text": "No no, that's wrong, delete it.",
+  "clean": "No, no, that's wrong. Delete it.",
+  "noisy": "No, no, that's wrong. Delete it."
+ },
+ "38": {
+  "text": "Bittu wants more credit, should I give it?",
+  "clean": "Bittoo wants more credit, should I give it?",
+  "noisy": "Bittoo wants more credit. Should I give it?"
+ },
+ "39": {
+  "text": "Can I trust Kuldeep with money?",
+  "clean": "Can I trust Kuldeep with money?",
+  "noisy": "Can I trust Kuldeep with money?"
+ },
+ "40": {
+  "text": "Good morning, how are you?",
+  "clean": "Good morning, how are you?",
+  "noisy": "Good morning. How are you?"
+ },
+ "41": {
+  "text": "What all can you do?",
+  "clean": "What all can you do?",
+  "noisy": "What all can you do?"
+ }
+}
